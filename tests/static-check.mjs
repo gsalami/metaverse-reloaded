@@ -50,6 +50,8 @@ assert.match(app, /localStorage\.setItem\(AVATAR_STORAGE_KEY/);
 assert.match(app, /function resolvePublicRoom/);
 assert.match(app, /metaverse-reloaded:last-spaces/);
 assert.match(app, /showRoomArrival\(portal\.target_title\)/);
+assert.match(app, /function syncJoinViewport/);
+assert.match(app, /window\.visualViewport\?\.addEventListener\('resize', syncJoinViewport\)/);
 assert.match(html, /id=["']public-room-panel["']/);
 assert.match(html, /href=["']spaces\.html["']/);
 assert.match(spacesHtml, /id=["']public-spaces["']/);
@@ -57,6 +59,8 @@ assert.match(spacesHtml, /id=["']recent-spaces["']/);
 assert.match(spacesJs, /url\.searchParams\.set\('room', roomId\)/);
 assert.match(css, /@media \(max-width: 760px\)/);
 assert.match(css, /\.mobile-move/);
+assert.match(css, /--join-vv-height/);
+assert.match(css, /#display-name, #room-name, #invite-code \{ font-size: 16px; \}/);
 assert.ok((await stat(new URL('favicon.svg', root))).size > 100);
 assert.equal(createHash('sha256').update(avatar).digest('hex'), '82d83a1cccb2e23d896336bd6fc1a558dc9830a220ff9ab0694de437b2b33550');
 

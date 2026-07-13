@@ -45,11 +45,11 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${address.port}/todos.html`);
-  await page.waitForFunction(() => document.querySelectorAll('.task-card').length === 12);
+  await page.waitForFunction(() => document.querySelectorAll('.task-card').length === 13);
 
   assert.equal(await page.locator('.column').count(), 5, 'five Kanban columns');
-  assert.equal(rows.length, 12, 'initial tasks seeded once');
-  assert.equal(await page.locator('#task-total').textContent(), '12');
+  assert.equal(rows.length, 13, 'initial tasks seeded once');
+  assert.equal(await page.locator('#task-total').textContent(), '13');
 
   const githubCard = page.locator('.task-card', { hasText: 'Öffentliches GitHub-Repository' });
   await githubCard.locator('select').selectOption('Blockiert');
@@ -62,18 +62,18 @@ try {
   await page.selectOption('#task-priority', 'Niedrig');
   await page.fill('#task-note', '<script>window.hacked=true</script> sichere Notiz');
   await page.click('#task-form button[type="submit"]');
-  await page.waitForFunction(() => document.querySelectorAll('.task-card').length === 13);
+  await page.waitForFunction(() => document.querySelectorAll('.task-card').length === 14);
   assert.equal(await page.locator('.task-card img').count(), 0, 'task titles render as text');
   assert.equal(await page.locator('.task-card script').count(), 0, 'task notes render as text');
   assert.equal(await page.evaluate(() => window.hacked), undefined, 'injected code did not execute');
 
   const secondPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await secondPage.goto(`http://127.0.0.1:${address.port}/todos.html`);
-  await secondPage.waitForFunction(() => document.querySelectorAll('.task-card').length === 13);
+  await secondPage.waitForFunction(() => document.querySelectorAll('.task-card').length === 14);
   assert.equal(rows.filter(row => row.task_id === 'max-people-25').length, 1, 'non-empty board is not seeded again');
   assert.equal(await secondPage.locator('.column').count(), 5);
   assert.deepEqual(errors, []);
-  console.log('todos-smoke: ok', JSON.stringify({ seeded: 12, statusUpdate: true, createTask: true, xssSafe: true, mobile: true }));
+  console.log('todos-smoke: ok', JSON.stringify({ seeded: 13, statusUpdate: true, createTask: true, xssSafe: true, mobile: true }));
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

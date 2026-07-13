@@ -86,7 +86,7 @@ async function exercise(browser, options) {
     const jump = page.locator('[data-action="jump"]');
     await jump.dispatchEvent('pointerdown', { pointerId: 2, pointerType: 'touch' });
     await jump.dispatchEvent('pointerup', { pointerId: 2, pointerType: 'touch' });
-    await page.waitForTimeout(120);
+    await page.waitForFunction(() => window.__mrDiag.jumpCount === 1 && window.__mrDiag.airborne);
     await jump.dispatchEvent('pointerdown', { pointerId: 3, pointerType: 'touch' });
     await jump.dispatchEvent('pointerup', { pointerId: 3, pointerType: 'touch' });
     await page.waitForFunction(() => window.__mrDiag.jumpCount === 2 && Math.abs(window.__mrDiag.flipRotation) > .2);

@@ -9,6 +9,7 @@
 ## Funktionen
 
 - elegante futuristische 3D-Welt für Desktop und Mobile
+- iPhone-taugliche Raum-Erstellung mit tastaturabhängigem Dialog und ohne Safari-Fokuszoom
 - KayKit-Rogue-Rig aus Kuble Office mit Idle-, Lauf-, Sitz- und Cheer-Animation
 - neutraler Basis-Body ohne sichtbare eingebackene Haare oder Kleidung
 - Avatar-Konfigurator mit Outfitfarbe, Haarfarbe, vier Haarmodulen und drei animierten 3D-Outfitmodulen
@@ -83,6 +84,7 @@ python3 -m http.server 8899
 - `npm run test:multiuser`: Host, Guest und Cohost, Avatar-Synchronisation, Voice, Screen, Chat und Raumkontrolle
 - `npm run test:portal`: Chat-Isolation und Portalwechsel zwischen zwei Spaces
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
+- `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
 - `node tests/ten-person-smoke.mjs`: WebRTC-Mesh-Regression mit zehn Personen
 - `node tests/capacity-smoke.mjs`: 25 Personen, Guest-only Seat all mit Auto-Lock und Ablehnung der 26. Person
 - `node tests/mobile-live-smoke.mjs`: echter mobiler Live-Beitritt, Touch-Bewegung und Chat

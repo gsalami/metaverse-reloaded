@@ -15,6 +15,7 @@ const INITIAL_TASKS = [
   ['seat-guests-auto-lock', 'Seat all setzt nur Guests und lockt automatisch', 'Erledigt', 'Hoch', 'Host/Cohost bleiben frei; Guests werden gesetzt, sofort gesperrt und durch Unlock wieder freigegeben.'],
   ['public-spaces-deeplinks', 'Öffentliche Liste aller Metaverses mit Deep Links', 'Erledigt', 'Hoch', 'Alle aktiven Räume erscheinen live unter spaces.html und können direkt als Guest geöffnet werden.'],
   ['recent-spaces-portal-feedback', 'Portal-Feedback und zuletzt besuchte Spaces', 'Erledigt', 'Hoch', 'Portalankunft benennt den neuen Space; die lokale Besuchshistorie ermöglicht die Rückkehr ohne Portal.'],
+  ['mobile-room-create-keyboard', 'Mobile Raum-Erstellung bei offener Tastatur', 'Erledigt', 'Hoch', 'Der Dialog folgt dem iOS-VisualViewport, verhindert Safari-Autozoom und hält den Erstellen-Button erreichbar.'],
   ['accounts-metaverses', 'Sichere Accounts und eigene Metaverses', 'Geplant', 'Hoch', 'Account-System mit Besitz, Mitgliedschaften, Rollen und Verwaltung eigener Metaverses serverseitig absichern.']
 ];
 

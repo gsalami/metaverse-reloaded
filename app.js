@@ -151,6 +151,20 @@ const ui = {
   help: $('#help-dialog')
 };
 
+function syncJoinViewport() {
+  const viewport = window.visualViewport;
+  const height = Math.max(260, Math.round(viewport?.height || window.innerHeight));
+  const top = Math.max(0, Math.round(viewport?.offsetTop || 0));
+  document.documentElement.style.setProperty('--join-vv-height', `${height}px`);
+  document.documentElement.style.setProperty('--join-vv-top', `${top}px`);
+  if (!ui.join.open || !ui.joinForm.contains(document.activeElement) || !document.activeElement.matches('input')) return;
+  const target = document.activeElement;
+  requestAnimationFrame(() => {
+    const entryPanel = target.closest('.entry-panel');
+    (entryPanel || target).scrollIntoView({ block: entryPanel ? 'start' : 'center', inline: 'nearest', behavior: 'auto' });
+  });
+}
+
 function cleanRoom(value) {
   const safe = String(value || 'main-stage').toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   return (safe || 'main-stage').slice(0, 32);
@@ -2372,6 +2386,7 @@ function unlockAudio() {
 }
 
 function bindUi() {
+  syncJoinViewport();
   setAvatarControls(loadAvatarProfile());
   ui.name.value = localStorage.getItem('mr-display-name') || '';
   ui.roomName.value = 'Mein Metaverse';
@@ -2382,6 +2397,15 @@ function bindUi() {
   ui.avatarCustomizer.addEventListener('input', updateAvatarProfileFromControls);
   ui.avatarCustomizer.addEventListener('change', updateAvatarProfileFromControls);
   ui.inviteCode.addEventListener('blur', () => { ui.inviteCode.value = normalizeInviteCode(ui.inviteCode.value); });
+  ui.joinForm.addEventListener('focusin', () => setTimeout(syncJoinViewport, 60));
+  for (const input of [ui.roomName, ui.inviteCode]) {
+    input.addEventListener('keydown', event => {
+      const activeMode = input === ui.roomName ? 'create' : 'join';
+      if (event.key !== 'Enter' || state.entryMode !== activeMode) return;
+      event.preventDefault();
+      ui.joinForm.requestSubmit();
+    });
+  }
   ui.joinForm.addEventListener('submit', joinEvent);
   ui.chatForm.addEventListener('submit', sendChat);
   ui.chatInput.addEventListener('input', () => { resizeTextarea(); updateMentionSuggestions(); });
@@ -2460,7 +2484,10 @@ function bindUi() {
   addEventListener('pointerdown', unlockAudio, { passive: true });
   addEventListener('beforeunload', leaveEvent);
   addEventListener('pagehide', leaveEvent);
+  window.visualViewport?.addEventListener('resize', syncJoinViewport);
+  window.visualViewport?.addEventListener('scroll', syncJoinViewport);
   addEventListener('resize', () => {
+    syncJoinViewport();
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
