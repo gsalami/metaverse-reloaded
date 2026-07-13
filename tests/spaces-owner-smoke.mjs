@@ -67,6 +67,12 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#own-spaces .own-space-card').length === 1);
   assert.equal(await page.locator('#public-spaces .space-card').count(), 2, 'public directory uses Supabase RPC');
   assert.equal(await page.locator('#own-count').textContent(), '1', 'only signed-in owner space is listed');
+  const ownerActionsLayout = await page.locator('#own-spaces .owner-actions').evaluate(element => ({
+    columns: getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    overflowing: element.scrollWidth > element.clientWidth,
+    labelsFit: [...element.children].every(child => child.scrollWidth <= child.clientWidth)
+  }));
+  assert.deepEqual(ownerActionsLayout, { columns: 2, overflowing: false, labelsFit: true }, 'owner actions form a clean mobile grid');
 
   await page.locator('#own-spaces .edit-space').click();
   await page.locator('#edit-title-field').fill('Neuer Space Name');
@@ -86,7 +92,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('#own-spaces .own-space-card').length === 0);
   assert.equal(store.rooms.length, 1, 'owner delete removes only the selected space');
   assert.deepEqual(errors, []);
-  console.log('spaces-owner-smoke: ok');
+  console.log('spaces-owner-smoke: ok', JSON.stringify({ ownerActionsGrid: true, labelsFit: true }));
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));
