@@ -2,6 +2,9 @@
 
 Öffentlicher, browserbasierter Eventraum für bis zu 25 Personen.
 
+- Live-App: https://metaverse-reloaded.host.kuble.com/
+- Live-TODO-Board: https://metaverse-reloaded.host.kuble.com/todos.html
+
 ## Funktionen
 
 - elegante futuristische 3D-Welt für Desktop und Mobile
