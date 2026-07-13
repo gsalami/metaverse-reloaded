@@ -8,7 +8,7 @@
   <title>Metaverse Reloaded</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=20260713-click-seat">
+  <link rel="stylesheet" href="styles.css?v=20260713-accounts">
   <script type="importmap">
     {
       "imports": {
@@ -228,6 +228,24 @@
         </div>
 
         <section class="entry-panel" id="create-panel" data-entry-panel="create">
+          <section class="create-auth" id="create-auth" aria-label="Account für eigene Räume">
+            <div class="create-auth-heading">
+              <span class="eyebrow">MAGIC LINK ACCOUNT</span>
+              <strong>Deine Spaces bleiben bei dir.</strong>
+            </div>
+            <div id="create-auth-signed-out" class="create-auth-signed-out">
+              <label for="create-auth-email">E-Mail-Adresse</label>
+              <div class="create-auth-email-row">
+                <input id="create-auth-email" type="email" inputmode="email" autocomplete="email" enterkeyhint="send" placeholder="du@firma.ch">
+                <button type="button" id="send-magic-link">Magic Link senden</button>
+              </div>
+            </div>
+            <div id="create-auth-signed-in" class="create-auth-signed-in" hidden>
+              <span><i aria-hidden="true">✓</i><span><small>ANGEMELDET ALS</small><strong id="create-auth-identity"></strong></span></span>
+              <button type="button" id="create-sign-out">Abmelden</button>
+            </div>
+            <p id="create-auth-message" role="status" aria-live="polite">Zum Erstellen brauchst du einen bestätigten Magic Link. Beitreten funktioniert weiterhin ohne Account.</p>
+          </section>
           <label for="room-name">Name des Raums</label>
           <input id="room-name" name="room-name" maxlength="48" enterkeyhint="go" placeholder="z. B. Kuble Townhall">
           <fieldset class="space-template-picker" id="space-template-picker">
@@ -275,7 +293,7 @@
               </label>
             </div>
           </fieldset>
-          <p>Du wirst automatisch Host und erhältst separate Codes für Guests und Cohosts.</p>
+          <p>Nach der E-Mail-Bestätigung wirst du automatisch Host und erhältst separate Codes für Guests und Cohosts.</p>
         </section>
 
         <section class="entry-panel" id="join-panel" data-entry-panel="join" hidden>
@@ -351,6 +369,6 @@
       </form>
     </dialog>
   </main>
-  <script type="module" src="app.js?v=20260713-click-seat"></script>
+  <script type="module" src="app.js?v=20260713-accounts"></script>
 </body>
 </html>

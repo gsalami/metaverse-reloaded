@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <title>Metaverse Reloaded · Öffentliche Spaces</title>
-  <link rel="stylesheet" href="spaces.css">
+  <link rel="stylesheet" href="spaces.css?v=20260713-accounts">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -24,6 +24,43 @@
   </header>
 
   <main>
+    <section class="account-panel" aria-labelledby="account-title">
+      <div class="account-copy">
+        <p class="eyebrow">DEIN ACCOUNT</p>
+        <h2 id="account-title">Eigene Spaces verwalten</h2>
+        <p id="account-description">Melde dich per Magic Link an. Danach kannst du deine Spaces bearbeiten und löschen.</p>
+      </div>
+
+      <form class="magic-link-form" id="magic-link-form">
+        <label for="account-email">E-Mail-Adresse</label>
+        <div class="form-row">
+          <input id="account-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@firma.ch" required>
+          <button class="primary-button" type="submit">Magic Link senden</button>
+        </div>
+      </form>
+
+      <div class="signed-in" id="signed-in" hidden>
+        <div>
+          <span class="signed-in-label">Angemeldet als</span>
+          <strong id="account-identity"></strong>
+        </div>
+        <button class="secondary-button" id="sign-out" type="button">Abmelden</button>
+      </div>
+      <p class="account-status" id="account-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="space-section own-section" id="own-section" aria-labelledby="own-title" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DEINE VERWALTUNG</p>
+          <h2 id="own-title">Meine Spaces</h2>
+        </div>
+        <span class="space-count" id="own-count">0</span>
+      </div>
+      <div class="space-grid" id="own-spaces" aria-live="polite" aria-busy="false"></div>
+      <p class="empty-state" id="own-state">Du hast noch keine eigenen Spaces.</p>
+    </section>
+
     <section class="space-section recent-section" aria-labelledby="recent-title">
       <div class="section-heading">
         <div>
@@ -65,6 +102,100 @@
     </article>
   </template>
 
-  <script src="spaces.js" defer></script>
+  <template id="own-space-card-template">
+    <article class="space-card own-space-card">
+      <div class="card-topline">
+        <span class="live-badge"><span aria-hidden="true"></span><span class="status-label">Aktiv</span></span>
+        <time></time>
+      </div>
+      <h3></h3>
+      <p class="room-id"></p>
+      <p class="template-label"></p>
+      <div class="card-actions owner-actions">
+        <a class="join-link">Öffnen <span aria-hidden="true">↗</span></a>
+        <button class="edit-space" type="button">Bearbeiten</button>
+        <button class="rotate-invites" type="button">Invite-Codes</button>
+        <button class="delete-space danger-button" type="button">Löschen</button>
+      </div>
+      <p class="copy-status" role="status" aria-live="polite"></p>
+    </article>
+  </template>
+
+  <dialog class="space-dialog" id="edit-dialog" aria-labelledby="edit-title">
+    <form id="edit-form">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">SPACE EINSTELLUNGEN</p>
+          <h2 id="edit-title">Space bearbeiten</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Dialog schliessen">×</button>
+      </div>
+      <input id="edit-room-id" name="roomId" type="hidden">
+      <label for="edit-title-field">Name</label>
+      <input id="edit-title-field" name="title" type="text" maxlength="120" required>
+      <label for="edit-template">Architektur</label>
+      <select id="edit-template" name="templateId">
+        <option value="neon-stage">Neon Arena</option>
+        <option value="alpine-summit">Alpine Lodge</option>
+        <option value="tropical-island">Tropical Pavilion</option>
+        <option value="mars-base">Mars Habitat</option>
+        <option value="cyber-city">Cyber Gallery</option>
+        <option value="zen-garden">Zen Courtyard</option>
+        <option value="moon-station">Lunar Observatory</option>
+        <option value="ocean-dome">Ocean Dome</option>
+        <option value="desert-festival">Desert Festival</option>
+        <option value="arctic-aurora">Arctic Ice Hall</option>
+      </select>
+      <label for="edit-status">Sichtbarkeit</label>
+      <select id="edit-status" name="status">
+        <option value="active">Aktiv und öffentlich</option>
+        <option value="archived">Archiviert</option>
+      </select>
+      <p class="dialog-status" id="edit-status-message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" type="button" data-close-dialog>Abbrechen</button>
+        <button class="primary-button" type="submit">Änderungen speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="space-dialog" id="invite-codes-dialog" aria-labelledby="invite-codes-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">NEUE ZUGANGSCODES</p>
+        <h2 id="invite-codes-title">Invite-Codes</h2>
+      </div>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Dialog schliessen">×</button>
+    </div>
+    <p>Die bisherigen Codes sind ab sofort ungültig. Teile diese neuen Codes nur mit den vorgesehenen Personen.</p>
+    <div class="invite-code-row">
+      <div><span>Guests</span><code id="new-guest-code"></code></div>
+      <button class="secondary-button" type="button" data-copy-code="new-guest-code">Kopieren</button>
+    </div>
+    <div class="invite-code-row">
+      <div><span>Cohosts</span><code id="new-cohost-code"></code></div>
+      <button class="secondary-button" type="button" data-copy-code="new-cohost-code">Kopieren</button>
+    </div>
+    <p class="dialog-status" id="invite-codes-status" role="status" aria-live="polite"></p>
+    <div class="dialog-actions">
+      <button class="primary-button" type="button" data-close-dialog>Fertig</button>
+    </div>
+  </dialog>
+
+  <dialog class="space-dialog danger-dialog" id="delete-dialog" aria-labelledby="delete-title">
+    <form id="delete-form">
+      <p class="eyebrow">SPACE LÖSCHEN</p>
+      <h2 id="delete-title">Space wirklich löschen?</h2>
+      <p><strong id="delete-space-name"></strong> wird dauerhaft entfernt. Der Deep Link funktioniert danach nicht mehr.</p>
+      <input id="delete-room-id" name="roomId" type="hidden">
+      <p class="dialog-status" id="delete-status-message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" type="button" data-close-dialog>Abbrechen</button>
+        <button class="danger-button" type="submit">Space löschen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="spaces.js?v=20260713-accounts" type="module"></script>
 </body>
 </html>

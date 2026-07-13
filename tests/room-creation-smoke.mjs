@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
@@ -55,6 +56,7 @@ async function createSuggestedRoom(browser, origin, creatorName, templateId) {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   await page.goto(origin, { waitUntil: 'networkidle', timeout: 30_000 });
 
   const suggestedTitle = assertUsefulSuggestion(await page.inputValue('#room-name'));

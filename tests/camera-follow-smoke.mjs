@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
@@ -36,6 +37,7 @@ async function openRoom(browser, label, errors) {
     if (message.type() === 'error') errors.push(message.text());
   });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   await page.goto(base, { waitUntil: 'networkidle', timeout: 30_000 });
   await page.waitForSelector('#join-dialog[open]');
   await page.fill('#display-name', `Camera ${label}`);

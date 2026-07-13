@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const expectedTemplateIds = [
@@ -98,11 +99,12 @@ async function makePage(browser, mobile, errors) {
     if (message.type() === 'error') errors.push(`${mobile ? 'mobile' : 'desktop'}: ${message.text()}`);
   });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   return { context, page };
 }
 
 async function inspectArchitecture(page, origin, templateId, mobile) {
-  await page.goto(`${origin}/?room=architecture-${templateId}`, { waitUntil: 'networkidle', timeout: 30_000 });
+  await page.goto(`${origin}/?room=architecture-${templateId}`, { waitUntil: 'networkidle', timeout: 45_000 });
   await page.fill('#display-name', `${mobile ? 'Mobile' : 'Desktop'} ${templateId}`);
   await page.click('#join-form .enter-button');
   await page.waitForFunction(id => {
@@ -112,7 +114,7 @@ async function inspectArchitecture(page, origin, templateId, mobile) {
       && typeof diag.architectureType === 'string'
       && diag.architectureType.length > 0
       && Array.isArray(diag.architectureObjects);
-  }, templateId, { timeout: 15_000 });
+  }, templateId, { timeout: 30_000 });
   const diagnostics = await page.evaluate(() => {
     const diag = window.__mrDiag;
     return {

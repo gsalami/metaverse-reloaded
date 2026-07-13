@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
@@ -61,6 +62,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   await page.goto(origin, { waitUntil: 'networkidle', timeout: 30_000 });
   await page.fill('#display-name', 'Mobile Creator');
   const suggestedTitle = (await page.inputValue('#room-name')).trim();
@@ -97,7 +99,7 @@ try {
   assert.equal(await page.evaluate(() => window.__mrDiag.role), 'host');
   const createdRoom = tables.rooms.find(room => room.title === suggestedTitle);
   assert.ok(createdRoom?.room_id, 'mobile submit creates the suggested room');
-  assert.equal(tables.room_templates.find(mapping => mapping.room_id === createdRoom.room_id)?.template_id, selectedTemplateId);
+  assert.equal(createdRoom.template_id, selectedTemplateId);
   assert.equal(await page.evaluate(() => window.__mrDiag.templateId), selectedTemplateId);
   assert.equal(await page.locator('#event-label').textContent(), suggestedTitle.toUpperCase());
   assert.equal(new URL(page.url()).searchParams.get('room'), createdRoom.room_id);

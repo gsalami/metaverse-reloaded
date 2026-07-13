@@ -2,6 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import {
+  supabase,
+  isSupabaseConfigured,
+  signInWithMagicLink,
+  signOut,
+  getSession,
+  onAuthStateChange
+} from './supabase-client.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -76,6 +84,9 @@ const state = {
   inviteCodes: null,
   entryMode: new URLSearchParams(location.search).has('room') ? 'public' : new URLSearchParams(location.search).has('invite') ? 'join' : 'create',
   publicAccess: null,
+  authUser: null,
+  authReady: false,
+  magicLinkPending: false,
   name: '',
   role: 'guest',
   color: '',
@@ -120,6 +131,14 @@ const ui = {
   name: $('#display-name'),
   roomName: $('#room-name'),
   inviteCode: $('#invite-code'),
+  createAuth: $('#create-auth'),
+  createAuthSignedOut: $('#create-auth-signed-out'),
+  createAuthSignedIn: $('#create-auth-signed-in'),
+  createAuthEmail: $('#create-auth-email'),
+  createAuthMessage: $('#create-auth-message'),
+  createAuthIdentity: $('#create-auth-identity'),
+  sendMagicLink: $('#send-magic-link'),
+  signOut: $('#create-sign-out'),
   avatarCustomizer: $('#avatar-customizer'),
   avatarPreview: $('#avatar-preview'),
   primaryColor: $('#avatar-primary-color'),
@@ -263,12 +282,17 @@ async function hashInviteCode(value) {
 }
 
 async function createUniqueRoom(title, templateId = DEFAULT_SPACE_TEMPLATE, generatedTitle = false) {
+  if (!isSupabaseConfigured()) throw new Error('Die Raum-Erstellung ist gerade nicht konfiguriert. Bitte versuche es später erneut.');
+  const session = sessionFrom(await getSession());
+  const user = session?.user || state.authUser;
+  if (!user) throw new Error('Bestätige zuerst den Magic Link in deiner E-Mail, um einen Raum zu erstellen.');
   let roomTitle = String(title || '').trim().replace(/\s+/g, ' ');
   if (roomTitle.length < 2) throw new Error('Bitte gib deinem Raum einen Namen mit mindestens zwei Zeichen.');
   if (generatedTitle) {
     for (let attempt = 0; attempt < 6; attempt++) {
-      const titleCollision = await dbGet('rooms', { title: roomTitle, status: 'active' }, 1);
-      if (!titleCollision.length) break;
+      const { data: titleCollision, error } = await supabase.rpc('public_list_spaces');
+      if (error) throw error;
+      if (!(titleCollision || []).some(room => String(room.name || room.title).toLocaleLowerCase() === roomTitle.toLocaleLowerCase())) break;
       roomTitle = newSuggestedRoomTitle();
       if (attempt === 5) throw new Error('Der eindeutige Raumname konnte nicht erzeugt werden. Bitte versuche es nochmals.');
     }
@@ -276,28 +300,34 @@ async function createUniqueRoom(title, templateId = DEFAULT_SPACE_TEMPLATE, gene
   for (let attempt = 0; attempt < 6; attempt++) {
     const guest = newInviteCode('guest');
     const cohost = newInviteCode('cohost');
-    const ownerToken = randomSegment(24);
     const roomId = `${cleanRoom(roomTitle).slice(0, 22)}-${randomSegment(6).toLowerCase()}`;
-    const [existingRoom, guestCodeHash, cohostCodeHash, ownerTokenHash] = await Promise.all([
-      dbGet('rooms', { room_id: roomId }, 1),
+    const [guestCodeHash, cohostCodeHash] = await Promise.all([
       hashInviteCode(guest),
-      hashInviteCode(cohost),
-      hashInviteCode(ownerToken)
+      hashInviteCode(cohost)
     ]);
-    if (existingRoom.length) continue;
-    const row = {
-      room_id: roomId,
-      title: roomTitle.slice(0, 48),
-      guest_code_hash: guestCodeHash,
-      cohost_code_hash: cohostCodeHash,
-      owner_token_hash: ownerTokenHash,
-      status: 'active',
-      created_at: new Date().toISOString()
+    const selectedTemplate = normalizeSpaceTemplate(templateId);
+    const { data, error } = await supabase.rpc('create_space', {
+      p_id: roomId,
+      p_name: roomTitle.slice(0, 48),
+      p_template_id: selectedTemplate,
+      p_guest_code_hash: guestCodeHash,
+      p_cohost_code_hash: cohostCodeHash,
+      p_max_users: MAX_PEOPLE
+    });
+    if (error) {
+      if (error.code === '23505') continue;
+      throw error;
+    }
+    const created = Array.isArray(data) ? data[0] : data;
+    const room = {
+      roomId: created?.id || roomId,
+      title: created?.name || roomTitle.slice(0, 48),
+      role: 'host',
+      roomOwner: true,
+      inviteCodes: { guest, cohost },
+      templateId: normalizeSpaceTemplate(created?.template_id || selectedTemplate)
     };
-    const selectedTemplate = await saveRoomTemplate(roomId, templateId);
-    await reliableDbPost('rooms', row, { room_id: roomId });
-    const room = { roomId, title: row.title, role: 'host', roomOwner: true, inviteCodes: { guest, cohost }, templateId: selectedTemplate };
-    localStorage.setItem(`mr-room-owner:${roomId}`, JSON.stringify({ ...room.inviteCodes, title: room.title }));
+    localStorage.setItem(`mr-room-owner:${room.roomId}`, JSON.stringify({ ...room.inviteCodes, title: room.title }));
     return room;
   }
   throw new Error('Der eindeutige Raum konnte nicht erzeugt werden. Bitte versuche es nochmals.');
@@ -307,22 +337,88 @@ async function resolveInviteCode(value) {
   const code = normalizeInviteCode(value);
   if (!/^(GUEST|COHOST)-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(code)) throw new Error('Dieser Invite-Code hat kein gültiges Format.');
   const hash = await hashInviteCode(code);
-  const field = code.startsWith('COHOST-') ? 'cohost_code_hash' : 'guest_code_hash';
-  const rows = await dbGet('rooms', { [field]: hash, status: 'active' }, 2);
-  const room = rows[0];
+  let room = null;
+  let supabaseResolved = false;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await supabase.rpc('resolve_space_invite', { p_invite_hash: hash });
+    if (!error) {
+      supabaseResolved = true;
+      room = Array.isArray(data) ? data[0] : data;
+    }
+  }
+  if (!room && !supabaseResolved) {
+    const field = code.startsWith('COHOST-') ? 'cohost_code_hash' : 'guest_code_hash';
+    const rows = await dbGet('rooms', { [field]: hash, status: 'active' }, 2).catch(() => []);
+    const legacy = rows[0];
+    if (legacy) {
+      room = {
+        id: legacy.room_id,
+        name: legacy.title,
+        role: field === 'cohost_code_hash' ? 'cohost' : 'guest',
+        template_id: await loadRoomTemplate(legacy.room_id)
+      };
+    }
+  }
   if (!room) throw new Error('Dieser Invite-Code ist ungültig oder nicht mehr aktiv.');
-  const templateId = await loadRoomTemplate(room.room_id);
-  return { roomId: room.room_id, title: room.title, role: field === 'cohost_code_hash' ? 'cohost' : 'guest', roomOwner: false, inviteCodes: null, templateId };
+  return {
+    roomId: room.id || room.room_id,
+    title: room.name || room.title,
+    role: room.role || (code.startsWith('COHOST-') ? 'cohost' : 'guest'),
+    roomOwner: false,
+    inviteCodes: null,
+    templateId: normalizeSpaceTemplate(room.template_id)
+  };
 }
 
 async function resolvePublicRoom(value) {
   const roomId = String(value || '').trim();
   if (!/^[a-z0-9_-]{3,64}$/i.test(roomId)) throw new Error('Dieser Space-Link ist ungültig.');
-  const rows = await dbGet('rooms', { room_id: roomId, status: 'active' }, 2);
-  const room = rows[0];
+  let room = null;
+  let owned = false;
+  let supabaseResolved = false;
+  if (isSupabaseConfigured()) {
+    const { data, error } = await supabase.rpc('get_public_space', { p_space_id: roomId });
+    if (!error) {
+      supabaseResolved = true;
+      room = Array.isArray(data) ? data[0] : data;
+    }
+    if (room && state.authUser && typeof supabase?.from === 'function') {
+      const ownerResult = await supabase
+        .from('spaces')
+        .select('id')
+        .eq('id', roomId)
+        .eq('owner_id', state.authUser.id)
+        .maybeSingle();
+      owned = Boolean(!ownerResult.error && ownerResult.data?.id === roomId);
+    }
+  }
+  if (!room && !supabaseResolved) {
+    const rows = await dbGet('rooms', { room_id: roomId, status: 'active' }, 2).catch(() => []);
+    const legacy = rows[0];
+    if (legacy) {
+      room = {
+        id: legacy.room_id,
+        name: legacy.title,
+        template_id: await loadRoomTemplate(legacy.room_id)
+      };
+    }
+  }
   if (!room) throw new Error('Dieser öffentliche Space ist nicht mehr aktiv.');
-  const templateId = await loadRoomTemplate(room.room_id);
-  return { roomId: room.room_id, title: room.title, role: 'guest', roomOwner: false, inviteCodes: null, templateId };
+  let inviteCodes = null;
+  if (owned) {
+    try {
+      const stored = JSON.parse(localStorage.getItem(`mr-room-owner:${roomId}`) || 'null');
+      if (stored?.guest && stored?.cohost) inviteCodes = { guest: stored.guest, cohost: stored.cohost };
+    } catch (_) {}
+  }
+  return {
+    roomId: room.id || room.room_id,
+    title: room.name || room.title,
+    role: owned ? 'host' : 'guest',
+    roomOwner: owned,
+    inviteCodes,
+    templateId: normalizeSpaceTemplate(room.template_id)
+  };
 }
 
 function rememberVisitedSpace(roomId, title) {
@@ -1137,6 +1233,7 @@ async function createPortal(event) {
       label: label.slice(0, 32),
       target_room_id: destination.roomId,
       target_title: destination.title,
+      target_template_id: destination.templateId,
       created_by: state.clientId,
       status: 'active',
       created_at: new Date().toISOString()
@@ -1200,9 +1297,16 @@ async function resumePortalTravel() {
     ui.joinError.textContent = 'Dieses Portal ist nicht mehr aktiv.';
     return;
   }
-  await enterRoom({ roomId: portal.target_room_id, title: portal.target_title, role: 'guest', roomOwner: false, inviteCodes: null, name });
-  showRoomArrival(portal.target_title);
-  notify(`Portal angekommen: Du bist jetzt in „${portal.target_title}“.`, 'success');
+  let target;
+  try {
+    target = await resolvePublicRoom(portal.target_room_id);
+  } catch (error) {
+    ui.joinError.textContent = error.message || 'Der Ziel-Space dieses Portals ist nicht mehr verfügbar.';
+    return;
+  }
+  await enterRoom({ ...target, name });
+  showRoomArrival(target.title);
+  notify(`Portal angekommen: Du bist jetzt in „${target.title}“.`, 'success');
 }
 
 function addTemplateDecoration(object, x, y, z) {
@@ -2783,6 +2887,12 @@ async function stopScreenShare() {
 // UI AND SESSION LIFECYCLE
 async function joinEvent(event) {
   event.preventDefault();
+  if (state.entryMode === 'create' && !state.authUser) {
+    ui.joinError.textContent = 'Fordere zuerst einen Magic Link an und bestätige deine E-Mail.';
+    ui.createAuthEmail.focus();
+    ui.createAuth.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
   const form = new FormData(ui.joinForm);
   const name = String(form.get('name') || '').trim().replace(/\s+/g, ' ');
   if (name.length < 2) {
@@ -2931,6 +3041,98 @@ function updateMentionSuggestions() {
   ui.mentions.hidden = matches.length === 0;
 }
 
+function sessionFrom(value) {
+  return value?.data?.session || value?.session || value || null;
+}
+
+function updateCreateAuthUi(message = '') {
+  const configured = isSupabaseConfigured();
+  const signedIn = Boolean(state.authUser);
+  ui.createAuthSignedOut.hidden = signedIn;
+  ui.createAuthSignedIn.hidden = !signedIn;
+  ui.createAuthIdentity.textContent = signedIn ? (state.authUser.email || 'Angemeldeter Account') : '';
+  ui.createAuthMessage.textContent = message || (!configured
+    ? 'Die Account-Anmeldung ist derzeit nicht konfiguriert.'
+    : signedIn
+      ? 'Du bist bestätigt und kannst eigene Räume erstellen.'
+      : 'Zum Erstellen brauchst du einen bestätigten Magic Link. Beitreten funktioniert weiterhin ohne Account.');
+  ui.sendMagicLink.disabled = !configured || state.magicLinkPending;
+  ui.signOut.disabled = !configured;
+  if (state.entryMode === 'create') {
+    ui.enterLabel.textContent = signedIn ? 'Eigenen Raum erstellen' : 'Anmelden, dann Raum erstellen';
+  }
+}
+
+async function refreshCreateAuth() {
+  if (!isSupabaseConfigured()) {
+    state.authReady = true;
+    updateCreateAuthUi();
+    return;
+  }
+  try {
+    const session = sessionFrom(await getSession());
+    state.authUser = session?.user || null;
+    state.authReady = true;
+    updateCreateAuthUi();
+  } catch (error) {
+    state.authReady = true;
+    updateCreateAuthUi(error.message || 'Die Anmeldung konnte nicht geladen werden.');
+  }
+}
+
+async function requestCreateMagicLink() {
+  const email = String(ui.createAuthEmail.value || '').trim();
+  if (!ui.createAuthEmail.checkValidity() || !email) {
+    ui.createAuthEmail.reportValidity();
+    return;
+  }
+  state.magicLinkPending = true;
+  updateCreateAuthUi('Magic Link wird gesendet …');
+  try {
+    const redirect = new URL(location.href);
+    redirect.search = '';
+    redirect.hash = '';
+    const result = await signInWithMagicLink(email, redirect.toString());
+    if (result?.error) throw result.error;
+    updateCreateAuthUi(`Magic Link an ${email} gesendet. Öffne die E-Mail auf diesem Gerät.`);
+  } catch (error) {
+    updateCreateAuthUi(error.message || 'Der Magic Link konnte nicht gesendet werden.');
+  } finally {
+    state.magicLinkPending = false;
+    updateCreateAuthUi(ui.createAuthMessage.textContent);
+  }
+}
+
+async function endCreateSession() {
+  try {
+    const result = await signOut();
+    if (result?.error) throw result.error;
+    state.authUser = null;
+    updateCreateAuthUi('Du bist abgemeldet. Beitreten ist weiterhin ohne Account möglich.');
+  } catch (error) {
+    updateCreateAuthUi(error.message || 'Abmelden nicht möglich.');
+  }
+}
+
+function bindCreateAuth() {
+  ui.sendMagicLink.addEventListener('click', requestCreateMagicLink);
+  ui.signOut.addEventListener('click', endCreateSession);
+  ui.createAuthEmail.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    requestCreateMagicLink();
+  });
+  if (isSupabaseConfigured()) {
+    onAuthStateChange((event, session) => {
+      const resolved = sessionFrom(session || (typeof event === 'object' ? event : null));
+      state.authUser = resolved?.user || null;
+      state.authReady = true;
+      updateCreateAuthUi(state.authUser ? 'E-Mail bestätigt. Du kannst jetzt deinen Raum erstellen.' : 'Du bist abgemeldet.');
+    });
+  }
+  refreshCreateAuth();
+}
+
 function setEntryMode(mode) {
   state.entryMode = mode === 'public' ? 'public' : mode === 'join' ? 'join' : 'create';
   const joining = state.entryMode === 'join';
@@ -2945,9 +3147,10 @@ function setEntryMode(mode) {
   ui.joinMode.setAttribute('aria-selected', String(joining));
   ui.roomName.required = !joining && !publicEntry;
   ui.inviteCode.required = joining;
-  ui.enterLabel.textContent = publicEntry ? 'Space als Guest betreten' : joining ? 'Mit Invite-Code beitreten' : 'Eigenen Raum erstellen';
+  ui.enterLabel.textContent = publicEntry ? 'Space als Guest betreten' : joining ? 'Mit Invite-Code beitreten' : state.authUser ? 'Eigenen Raum erstellen' : 'Anmelden, dann Raum erstellen';
   ui.joinError.textContent = '';
-  setTimeout(() => (publicEntry ? ui.name : joining ? ui.inviteCode : ui.roomName).focus(), 0);
+  updateCreateAuthUi();
+  setTimeout(() => (publicEntry ? ui.name : joining ? ui.inviteCode : state.authUser ? ui.roomName : ui.createAuthEmail).focus(), 0);
 }
 
 async function preparePublicDeepLink() {
@@ -2959,6 +3162,9 @@ async function preparePublicDeepLink() {
     state.publicAccess = await resolvePublicRoom(roomId);
     ui.publicRoomTitle.textContent = state.publicAccess.title;
     ui.eventLabel.textContent = state.publicAccess.title.toUpperCase();
+    ui.enterLabel.textContent = state.publicAccess.roomOwner
+      ? 'Eigenen Space als Host betreten'
+      : 'Space als Guest betreten';
     return true;
   } catch (error) {
     state.publicAccess = null;
@@ -3040,6 +3246,7 @@ function handleSeatPointer(event) {
 
 function bindUi() {
   syncJoinViewport();
+  bindCreateAuth();
   setAvatarControls(loadAvatarProfile());
   ui.name.value = localStorage.getItem('mr-display-name') || '';
   setSuggestedRoomTitle();

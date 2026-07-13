@@ -21,7 +21,7 @@ const INITIAL_TASKS = [
   ['unique-room-name-mobile-create', 'Unique Raumnamen und mobile Erstellung', 'Erledigt', 'Hoch', 'Jede neue Seite schlägt einen einzigartigen sichtbaren Raumnamen vor; der mobile Create-Button bleibt auch über der iPhone-Tastatur sichtbar und anklickbar.'],
   ['distinct-room-architectures', 'Unterschiedliche Raumgrössen und Architekturen', 'Erledigt', 'Hoch', 'Zehn eigene Architekturen mit neun Raumabmessungen: unter anderem Alpine Lodge mit Kamin, Cyber Gallery, Zen Courtyard, Dome, Habitat und Festivalfläche; Mobile lädt reduzierte Architekturdetails.'],
   ['click-to-sit', 'Sitzplatz per Klick oder Tap auswählen', 'Erledigt', 'Hoch', 'Freie Sitze sind auf Desktop und Mobile direkt auswählbar; Belegung, Screen-Ausrichtung, Aufstehen, Lock und Multiuser-Synchronisation sind getestet.'],
-  ['accounts-metaverses', 'Magic-Link-Accounts und eigene Metaverses', 'Blockiert', 'Hoch', 'Für sichere Besitz-, Bearbeitungs- und Löschrechte braucht die öffentliche App ein Auth-Backend mit Row-Level Security; benötigt werden Supabase-Projekt-URL und Public/Anon-Key.']
+  ['accounts-metaverses', 'Magic-Link-Accounts und eigene Metaverses', 'Erledigt', 'Hoch', 'Supabase Auth mit Resend-Magic-Link, Row Level Security, Owner-Dashboard, Bearbeiten, Löschen und Invite-Code-Erneuerung sind produktiv umgesetzt und getestet.']
 ];
 
 const elements = {

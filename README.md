@@ -10,6 +10,8 @@
 
 - elegante futuristische 3D-Welt für Desktop und Mobile
 - iPhone-taugliche Raum-Erstellung mit tastaturabhängigem Dialog und ohne Safari-Fokuszoom
+- passwortlose Accounts per E-Mail-Magic-Link für die sichere Raum-Erstellung
+- persönlicher Bereich unter `spaces.html` zum Umbenennen, Löschen und Erneuern der Invite-Codes eigener Spaces
 - automatisch vorgeschlagene, kollisionsgeprüfte Raumnamen statt generischem „Mein Metaverse“
 - zehn auswählbare, mobile-fähige Architekturen mit neun unterschiedlichen Raumgrössen: Neon Arena, Alpine Lodge mit Kamin, Tropical Pavilion, Mars Habitat, Cyber Gallery, Zen Courtyard, Lunar Observatory, Ocean Dome, Desert Festival und Arctic Ice Hall
 - KayKit-Rogue-Rig aus Kuble Office mit Idle-, Lauf-, Sitz- und Cheer-Animation
@@ -38,7 +40,7 @@
 ## Nutzung
 
 1. Seite öffnen und Namen eingeben.
-2. `Raum erstellen` wählen, einen Namen und eines der zehn Designs festlegen. Der Creator ist automatisch Host.
+2. `Raum erstellen` wählen und den Magic Link per E-Mail bestätigen. Danach einen Namen und eines der zehn Designs festlegen. Der Creator ist automatisch Host.
 3. Alternativ `Raum beitreten` wählen und einen Guest- oder Cohost-Code eingeben. Die Rolle wird automatisch gesetzt.
    Ein öffentlicher Deep Link `/?room=RAUM-ID` öffnet den Zielraum direkt als Guest-Zugang.
 4. Mit `W A S D`, Pfeiltasten oder dem mobilen Steuerkreuz bewegen.
@@ -49,15 +51,20 @@
 9. Einen freien Sitzplatz anklicken oder antippen, um sich zu setzen. Erneut klicken oder loslaufen, um bei entsperrtem Raum wieder aufzustehen.
 10. `Seat all` verteilt alle Guests auf Sitzplätze mit Blick zur Main Stage und sperrt sie sofort. Host und Cohosts bleiben beweglich; nach `Unlock Guests` können Guests wieder aufstehen.
 11. Nur der Haupt-Host sieht die getrennten Guest- und Cohost-Codes in der Invite-Konsole.
+12. Unter `spaces.html` können angemeldete Personen ihre eigenen Spaces bearbeiten, löschen und beide Invite-Codes erneuern. Alte Codes werden dabei sofort ungültig.
 
 Screensharing hängt von der Browserunterstützung ab. Desktop-Chrome und Desktop-Safari sind dafür die empfohlenen Oberflächen. Mobile Teilnehmende können die Welt, Host-Audio, Screenshare und Chat nutzen; mobile Browser ohne `getDisplayMedia` können selbst keinen Bildschirm senden.
 
 ## Realtime-Architektur
 
+- Supabase Auth: passwortlose Magic-Link-Sessions
+- Resend SMTP: produktiver Versand der Auth-E-Mails über die verifizierte Absenderdomain
+- Supabase PostgreSQL mit Row Level Security: sichere Ownership, Space-Metadaten und gehashte Invite-Codes
+- öffentliche Supabase-RPCs: Space-Verzeichnis, Deep Links und Invite-Auflösung ohne Offenlegung der Hashes
 - `/_db/presence/presence`: Room Discovery und Heartbeats
 - `/_db/chat/messages`: Textchat und Mentions
 - `/_db/realtime/signals`: atomare WebRTC-Angebote und Antworten inklusive ICE Candidates
-- `/_db/spaces/rooms`: eindeutige Räume und SHA-256-Hashes der Invite-Codes
+- `/_db/spaces/rooms`: Legacy-Räume und Realtime-Kompatibilität während der Migration
 - `/_db/spaces/room_templates`: persistente Design-Zuordnung pro Raum mit Fallback für ältere Räume
 - `/_db/spaces/portals`: aktive Verbindungen zwischen Spaces
 - `/_db/profiles/avatars`: raumbezogene Avatarprofile für die Remote-Darstellung
@@ -70,7 +77,9 @@ Für bis zu 25 Personen sendet ein Host Audio und einen auf 15 bis 24 FPS begren
 - `index.html`: UI und Dialoge
 - `styles.css`: responsive Gestaltung und Mobile-Layout
 - `app.js`: Three.js, Realtime, Chat und WebRTC
-- `spaces.html`, `spaces.css`, `spaces.js`: öffentliches Space-Verzeichnis und lokale Besuchshistorie
+- `supabase-client.js`: browserseitiger Supabase-Client für Auth und sichere Space-Operationen
+- `supabase/migrations/20260713160000_spaces_auth.sql`: Tabellen, Row Level Security und RPCs
+- `spaces.html`, `spaces.css`, `spaces.js`: öffentliches Space-Verzeichnis, Account-Dashboard und lokale Besuchshistorie
 - `public/assets/avatars/kaykit-rogue.glb`: CC0-Animationsrig; die sechs originalen Rogue-Render-Meshes werden im Client ausgeblendet
 - `public/assets/avatars/LICENSE.md`: Herkunft und Lizenz
 - `AVATAR-IMPLEMENTATION.md`: technische Entscheidung, Asset-Hash und Grenzen der modularen Avatarbasis
@@ -90,6 +99,7 @@ python3 -m http.server 8899
 - `npm run test:multiuser`: Host, Guest und Cohost, Avatar-Synchronisation, Voice, Screen, Chat und Raumkontrolle
 - `npm run test:portal`: Chat-Isolation und Portalwechsel zwischen zwei Spaces
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
+- `npm run test:spaces-owner`: Besitzer:innen-Dashboard, Umbenennen, Code-Erneuerung, Löschen und Mobile-Layout
 - `npm run test:templates`: zehn Designs, Persistenz, Deep-Link-Join und Fallback für ältere Räume
 - `npm run test:architectures`: zehn eigenständige Architekturen, Raumgrössen, Kamin, Gallery, Mobile-Detailreduktion sowie 25 Sitzplätze
 - `npm run test:room-creation`: einzigartige Namensvorschläge, sichtbare Titel und unterschiedliche Deep Links

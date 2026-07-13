@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const output = new URL('../output/', import.meta.url);
@@ -34,6 +35,7 @@ async function exercise(browser, options) {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   await page.goto(base, { waitUntil: 'networkidle', timeout: 30_000 });
   await page.waitForSelector('#join-dialog[open]');
   await page.screenshot({ path: fileURLToPath(new URL(`join-${options.name}.png`, output)), fullPage: true });
@@ -44,8 +46,8 @@ async function exercise(browser, options) {
     : { primaryColor: '#d246a6', hairStyle: 'none', hairColor: '#1a9ee8', outfitStyle: 'cyber' };
   await page.locator('#avatar-primary-color').fill(avatarChoice.primaryColor);
   await page.locator('#avatar-hair-color').fill(avatarChoice.hairColor);
-  await page.check(`[name="hair-style"][value="${avatarChoice.hairStyle}"]`, { force: true });
-  await page.check(`[name="outfit-style"][value="${avatarChoice.outfitStyle}"]`, { force: true });
+  await page.locator(`label:has([name="hair-style"][value="${avatarChoice.hairStyle}"])`).click();
+  await page.locator(`label:has([name="outfit-style"][value="${avatarChoice.outfitStyle}"])`).click();
   assert.equal(await page.locator('#avatar-preview').getAttribute('data-hair'), avatarChoice.hairStyle);
   assert.equal(await page.locator('#avatar-preview').getAttribute('data-outfit'), avatarChoice.outfitStyle);
   await page.click('.enter-button');
@@ -102,10 +104,11 @@ async function exercise(browser, options) {
   await page.waitForFunction(title => document.querySelector('#public-room-title')?.textContent === title, publicRoom.title);
   assert.equal(await page.locator('#public-room-panel').isVisible(), true);
   assert.equal(await page.locator('.entry-tabs').isVisible(), false);
-  assert.equal(await page.locator('#join-form .enter-button span').textContent(), 'Space als Guest betreten');
+  assert.equal(await page.locator('#join-form .enter-button span').textContent(), 'Eigenen Space als Host betreten');
   await page.click('#join-form .enter-button');
   await page.waitForFunction(eventId => window.__mrDiag?.joined === true && window.__mrDiag.eventId === eventId, publicRoom.eventId);
-  assert.equal(await page.evaluate(() => window.__mrDiag.role), 'guest');
+  assert.equal(await page.evaluate(() => window.__mrDiag.role), 'host');
+  assert.equal(await page.evaluate(() => window.__mrDiag.roomOwner), true);
   const recent = await page.evaluate(() => JSON.parse(localStorage.getItem('metaverse-reloaded:last-spaces') || '[]'));
   assert.equal(recent[0]?.roomId, publicRoom.eventId);
   assert.deepEqual(errors, []);

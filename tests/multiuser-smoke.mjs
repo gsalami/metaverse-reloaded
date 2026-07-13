@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const room = `Test Mesh ${Date.now()}`;
@@ -48,15 +49,18 @@ async function prepare(context, errors) {
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  if (!process.env.MR_LIVE) await page.route('**/_db/**', database);
+  if (!process.env.MR_LIVE) {
+    await page.route('**/_db/**', database);
+    await installSupabaseMock(page, tables);
+  }
   return page;
 }
 
 async function selectAvatar(page, profile) {
   await page.locator('#avatar-primary-color').fill(profile.primaryColor);
   await page.locator('#avatar-hair-color').fill(profile.hairColor);
-  await page.check(`[name="hair-style"][value="${profile.hairStyle}"]`, { force: true });
-  await page.check(`[name="outfit-style"][value="${profile.outfitStyle}"]`, { force: true });
+  await page.locator(`label:has([name="hair-style"][value="${profile.hairStyle}"])`).click();
+  await page.locator(`label:has([name="outfit-style"][value="${profile.outfitStyle}"])`).click();
 }
 
 async function createRoom(page, name, profile) {

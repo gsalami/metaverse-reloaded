@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const live = process.env.MR_LIVE === '1';
@@ -25,11 +26,14 @@ async function database(route) {
   return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows }) });
 }
 
-async function makePage(context, errors) {
+async function makePage(context, errors, options = {}) {
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  if (!live) await page.route('**/_db/**', database);
+  if (!live) {
+    await page.route('**/_db/**', database);
+    await installSupabaseMock(page, tables, options);
+  }
   return page;
 }
 
@@ -79,7 +83,7 @@ try {
   const guestContext = await browser.newContext({ viewport: { width: 1100, height: 760 } });
   const destination = await makePage(destinationContext, errors);
   const source = await makePage(sourceContext, errors);
-  const guest = await makePage(guestContext, errors);
+  const guest = await makePage(guestContext, errors, { user: null });
 
   const suffix = Date.now();
   const targetRoom = await createRoom(destination, 'Destination Host', `Test Portal Destination ${suffix}`);

@@ -26,3 +26,4 @@ playwright-report/
 *.log
 *.tmp
 .cache/
+supabase/.temp/

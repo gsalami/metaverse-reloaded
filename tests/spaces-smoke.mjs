@@ -63,6 +63,20 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
+  await context.route('**/supabase-client.js*', route => route.fulfill({
+    status: 200,
+    contentType: 'text/javascript',
+    body: `
+      export const supabase = null;
+      export function isSupabaseConfigured() { return false; }
+      export async function signInWithMagicLink() { return { data: null, error: null }; }
+      export async function signOut() { return { data: null, error: null }; }
+      export async function getSession() { return { data: { session: null }, error: null }; }
+      export function onAuthStateChange() {
+        return { data: { subscription: { unsubscribe() {} } } };
+      }
+    `
+  }));
   await page.goto(`${origin}/spaces.html`);
   await page.waitForFunction(() => document.querySelectorAll('#public-spaces .space-card').length === 2);
 

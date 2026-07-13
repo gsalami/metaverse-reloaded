@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const expectedTemplateIds = [
@@ -74,6 +75,7 @@ async function makePage(browser, errors) {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   return { context, page };
 }
 
@@ -118,9 +120,8 @@ try {
 
   const createdRoom = tables.rooms.find(room => room.title === 'Ocean Workshop');
   assert.ok(createdRoom?.room_id, 'room creation persisted the room');
-  const createdMapping = tables.room_templates.find(mapping => mapping.room_id === createdRoom.room_id);
-  assert.equal(createdMapping?.template_id, selectedTemplateId, 'room creation persisted its selected template separately');
-  assert.ok(!Number.isNaN(Date.parse(createdMapping?.updated_at)), 'template mapping has an update timestamp');
+  assert.equal(createdRoom.template_id, selectedTemplateId, 'room creation persisted its selected template in Supabase');
+  assert.ok(!Number.isNaN(Date.parse(createdRoom.updated_at)), 'room has an update timestamp');
   assert.equal(await page.evaluate(() => window.__mrDiag.templateId), selectedTemplateId, 'new room applies its selected template');
   await context.close();
 

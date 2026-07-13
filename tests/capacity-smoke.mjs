@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
+import { installSupabaseMock } from './supabase-mock.mjs';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
@@ -28,6 +29,7 @@ async function newPage(browser) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   await page.route('**/_db/**', mockDb);
+  await installSupabaseMock(page, tables);
   return { context, page };
 }
 
