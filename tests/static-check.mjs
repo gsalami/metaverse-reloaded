@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import { readFile, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+
+const root = new URL('../', import.meta.url);
+const [html, css, app, avatar] = await Promise.all([
+  readFile(new URL('index.html', root), 'utf8'),
+  readFile(new URL('styles.css', root), 'utf8'),
+  readFile(new URL('app.js', root), 'utf8'),
+  readFile(new URL('public/assets/avatars/kaykit-rogue.glb', root))
+]);
+
+for (const required of ['join-dialog', 'invite-dialog', 'portal-dialog', 'portal-form', 'portal-prompt', 'create-mode-button', 'join-mode-button', 'room-name', 'invite-code', 'avatar-customizer', 'avatar-preview', 'avatar-primary-color', 'avatar-hair-color', 'world', 'chat-panel', 'people-panel', 'mic-button', 'share-button', 'stage-video', 'mobile-move', 'emote-button', 'emote-tray', 'host-room-controls', 'seat-all-button', 'lock-seats-button', 'unlock-seats-button', 'portals-button']) {
+  assert.match(html, new RegExp(`id=["']${required}["']`), `Missing HTML element #${required}`);
+}
+
+for (const selector of app.matchAll(/\$\('#([A-Za-z0-9_-]+)'\)/g)) {
+  assert.match(html, new RegExp(`id=["']${selector[1]}["']`), `app.js refers to missing #${selector[1]}`);
+}
+
+assert.match(app, /const MAX_PEOPLE = 25/);
+assert.match(app, /const SEAT_ROWS = \[/);
+assert.match(app, /\{ count: 7, radius:/);
+assert.match(app, /\{ count: 8, radius:/);
+assert.match(app, /\{ count: 10, radius:/);
+assert.match(html, /id=["']capacity-count["']>0 \/ 25</);
+assert.match(app, /getDisplayMedia/);
+assert.match(app, /getUserMedia/);
+assert.match(app, /RTCPeerConnection/);
+assert.match(app, /createDataChannel\('world'/);
+assert.match(app, /mentionsCurrentUser/);
+assert.match(app, /DOUBLE_JUMP_VELOCITY/);
+assert.match(app, /triggerEmote/);
+assert.match(app, /seatAllPeople/);
+assert.match(app, /lockAllSeats/);
+assert.match(app, /MAIN_STAGE_SCREEN_POSITION/);
+assert.match(app, /Empty rooms deliberately contain no decorative\/static portal rings/);
+assert.match(app, /public\/assets\/avatars\/kaykit-rogue\.glb/);
+assert.match(app, /\/_db\/profiles\/avatars/);
+assert.match(app, /function buildAvatarAccessories/);
+assert.match(app, /localStorage\.setItem\(AVATAR_STORAGE_KEY/);
+assert.match(css, /@media \(max-width: 760px\)/);
+assert.match(css, /\.mobile-move/);
+assert.ok((await stat(new URL('favicon.svg', root))).size > 100);
+assert.equal(createHash('sha256').update(avatar).digest('hex'), '82d83a1cccb2e23d896336bd6fc1a558dc9830a220ff9ab0694de437b2b33550');
+
+console.log('static-check: ok');

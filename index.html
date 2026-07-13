@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <meta name="description" content="Metaverse Reloaded - futuristische Events für bis zu 25 Personen.">
+  <title>Metaverse Reloaded</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main id="app" aria-label="Metaverse Reloaded Eventraum">
+    <canvas id="world" aria-label="Begehbare futuristische 3D-Welt"></canvas>
+
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+
+    <header class="topbar glass">
+      <a class="brand" href="/" aria-label="Metaverse Reloaded Startseite">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+        <span><strong>METAVERSE</strong><small>RELOADED</small></span>
+      </a>
+      <div class="event-pill" title="Aktueller Eventraum">
+        <span class="live-dot"></span>
+        <span id="event-label">MAIN STAGE</span>
+      </div>
+      <div class="capacity" aria-live="polite">
+        <span class="avatar-stack" id="avatar-stack"></span>
+        <strong id="capacity-count">0 / 25</strong>
+        <span class="capacity-copy">im Raum</span>
+      </div>
+    </header>
+
+    <section class="world-hint glass" id="world-hint" aria-label="Steuerung">
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+      <span>Bewegen</span>
+      <span class="hint-divider"></span>
+      <span><kbd>SPACE</kbd></span>
+      <span>Jump / Salto</span>
+      <span class="hint-divider"></span>
+      <span>Maus ziehen</span>
+      <span>Kamera</span>
+      <button class="icon-button small" id="close-hint" aria-label="Hinweis schliessen">×</button>
+    </section>
+
+    <section class="host-room-controls glass" id="host-room-controls" aria-label="Host-Raumkontrolle" hidden>
+      <span class="host-control-label"><i class="live-dot"></i> HOST CONTROL</span>
+      <button type="button" id="seat-all-button" title="Alle Personen auf Sitzplätze verteilen"><b>▦</b><span>Seat all</span></button>
+      <button type="button" id="lock-seats-button" title="Alle Personen auf ihren Sitzplätzen sperren"><b>🔒</b><span>Lock</span></button>
+      <button type="button" id="unlock-seats-button" title="Sitzplatzsperre aufheben" disabled><b>🔓</b><span>Unlock</span></button>
+      <button type="button" id="portals-button" title="Andere Spaces über Portale verbinden"><b>◉</b><span>Portals</span></button>
+    </section>
+
+    <aside class="people-panel glass" id="people-panel" aria-label="Personen im Raum">
+      <div class="panel-title-row">
+        <div>
+          <span class="eyebrow">LIVE PRESENCE</span>
+          <h2>Im Raum</h2>
+        </div>
+        <button class="icon-button" data-close="people-panel" aria-label="Personenliste schliessen">×</button>
+      </div>
+      <div id="people-list" class="people-list"></div>
+      <p class="panel-note">Klicke auf eine Person, um sie im Chat zu erwähnen.</p>
+    </aside>
+
+    <aside class="chat-panel glass" id="chat-panel" aria-label="Event-Chat">
+      <div class="panel-title-row">
+        <div>
+          <span class="eyebrow">EVENT CHAT</span>
+          <h2>Conversation</h2>
+          <span class="chat-room-scope" id="chat-room-scope">ROOM: —</span>
+        </div>
+        <button class="icon-button" data-close="chat-panel" aria-label="Chat schliessen">×</button>
+      </div>
+      <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+      <form id="chat-form" class="chat-form">
+        <label class="sr-only" for="chat-input">Nachricht schreiben</label>
+        <textarea id="chat-input" maxlength="500" rows="1" placeholder="Nachricht oder @Name …" required></textarea>
+        <button type="submit" class="send-button" aria-label="Nachricht senden">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8-3-8Zm3.4 7h7.4L6.6 6.9 7.4 11Zm-.8 6.1 8.2-4.1H7.4l-.8 4.1Z"/></svg>
+        </button>
+      </form>
+      <div class="mention-suggestions" id="mention-suggestions" hidden></div>
+    </aside>
+
+    <section class="media-stage glass" id="media-stage" aria-label="Geteilter Bildschirm" hidden>
+      <div class="media-topline">
+        <span><i class="live-dot"></i> LIVE SCREEN</span>
+        <button class="icon-button small" id="minimise-stage" aria-label="Bildschirm minimieren">−</button>
+      </div>
+      <video id="stage-video" autoplay playsinline></video>
+    </section>
+
+    <div class="notifications" id="notifications" aria-live="assertive"></div>
+
+    <button type="button" class="portal-prompt glass" id="portal-prompt" hidden>
+      <span>PORTAL IN REICHWEITE</span>
+      <strong id="portal-prompt-label">Space betreten</strong>
+      <small><kbd>E</kbd> oder tippen</small>
+    </button>
+
+    <nav class="control-dock glass" aria-label="Event-Steuerung">
+      <button class="dock-button" id="people-button" type="button">
+        <span class="dock-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9v-1.5c0-3 3-5.5 7-5.5s7 2.5 7 5.5V20h-14Zm14.3-7.6a3.5 3.5 0 0 0 0-6.8 5.8 5.8 0 0 1 0 6.8Zm1.4 1.3c2 .9 3.3 2.5 3.3 4.3v2h-3v-1.5c0-1.7-.7-3.3-2-4.6.6-.1 1.1-.2 1.7-.2Z"/></svg>
+        </span>
+        <span>Personen</span>
+      </button>
+      <button class="dock-button host-control" id="mic-button" type="button" disabled>
+        <span class="dock-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm7-3a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.9V20H8a1 1 0 0 0 0 2h8a1 1 0 0 0 0-2h-3v-2.1A7 7 0 0 0 19 11Z"/></svg>
+        </span>
+        <span>Mikrofon</span>
+      </button>
+      <button class="dock-main host-control" id="share-button" type="button" disabled>
+        <span class="share-pulse"></span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h6v2H7a1 1 0 0 0 0 2h10a1 1 0 0 0 0-2h-3v-2h6a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 12H4V6h16v10Zm-9-7.6V14a1 1 0 0 0 2 0V8.4l1.3 1.3a1 1 0 1 0 1.4-1.4l-3-3a1 1 0 0 0-1.4 0l-3 3a1 1 0 0 0 1.4 1.4L11 8.4Z"/></svg>
+        <span>Screen teilen</span>
+      </button>
+      <button class="dock-button" id="chat-button" type="button">
+        <span class="dock-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5.4 3.6A1 1 0 0 1 2 20.8V5a2 2 0 0 1 2-2Zm0 2v13.9L8.4 16H20V5H4Zm3 3h10v2H7V8Zm0 4h7v2H7v-2Z"/></svg>
+          <span class="unread-badge" id="unread-badge" hidden>0</span>
+        </span>
+        <span>Chat</span>
+      </button>
+      <button class="dock-button" id="emote-button" type="button" aria-expanded="false" aria-controls="emote-tray">
+        <span class="dock-icon emote-icon" aria-hidden="true">☺</span>
+        <span>Reaktionen</span>
+      </button>
+      <button class="dock-button" id="invite-button" type="button">
+        <span class="dock-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 7a4 4 0 1 0-3.9-5H14a2 2 0 1 1 2 3h-1v2h1Zm-4 13v-1.5c0-3-3-5.5-7-5.5s-7 2.5-7 5.5V20h14Zm-7-5c2.8 0 5 1.6 5 3H0c0-1.4 2.2-3 5-3Zm12-6h-2v3h-3v2h3v3h2v-3h3v-2h-3V9Z" transform="translate(2)"/></svg>
+        </span>
+        <span>Einladen</span>
+      </button>
+    </nav>
+
+    <section class="emote-tray glass" id="emote-tray" aria-label="Reaktionen" hidden>
+      <span class="emote-tray-label">REACTIONS</span>
+      <button type="button" data-emote="clap" title="Applaus"><b>👏</b><span>Clap</span></button>
+      <button type="button" data-emote="hearts" title="Herzen"><b>❤️</b><span>Love</span></button>
+      <button type="button" data-emote="celebrate" title="Feiern"><b>🙌</b><span>Celebrate</span></button>
+      <button type="button" data-emote="wave" title="Winken"><b>👋</b><span>Wave</span></button>
+      <button type="button" data-emote="laugh" title="Lachen"><b>😂</b><span>Laugh</span></button>
+    </section>
+
+    <div class="mobile-move glass" id="mobile-move" aria-label="Bewegungssteuerung">
+      <button data-key="KeyW" aria-label="Vorwärts">▲</button>
+      <button data-key="KeyA" aria-label="Links">◀</button>
+      <button class="jump-button" data-action="jump" aria-label="Springen, zweimal für Salto">↟</button>
+      <button data-key="KeyS" aria-label="Rückwärts">▼</button>
+      <button data-key="KeyD" aria-label="Rechts">▶</button>
+    </div>
+
+    <dialog id="join-dialog" class="join-dialog">
+      <div class="join-visual" aria-hidden="true">
+        <div class="orb"><i></i><i></i><i></i><span></span></div>
+        <p>LIVE SPACE / 01</p>
+      </div>
+      <form id="join-form" class="join-form" method="dialog">
+        <a class="brand join-brand" href="/" aria-label="Metaverse Reloaded">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+          <span><strong>METAVERSE</strong><small>RELOADED</small></span>
+        </a>
+        <span class="eyebrow">YOUR SPACE, YOUR PEOPLE</span>
+        <h1>Dein Raum.<br><em>Deine Einladung.</em></h1>
+        <p class="join-copy">Erstelle einen neuen Raum oder tritt mit einem persönlichen Invite-Code bei.</p>
+
+        <label for="display-name">Dein Name</label>
+        <input id="display-name" name="name" maxlength="32" autocomplete="name" placeholder="Vorname Nachname" autofocus required>
+
+        <fieldset class="avatar-customizer" id="avatar-customizer">
+          <legend>Dein Avatar</legend>
+          <div class="avatar-preview" id="avatar-preview" data-hair="short" data-outfit="rogue" aria-label="Avatar-Vorschau">
+            <span class="preview-hair"></span><span class="preview-head"></span><span class="preview-body"></span><span class="preview-outfit"></span>
+          </div>
+          <div class="avatar-options">
+            <div class="color-options">
+              <label for="avatar-primary-color">Outfitfarbe <input id="avatar-primary-color" type="color" value="#8c6cff"></label>
+              <label for="avatar-hair-color">Haarfarbe <input id="avatar-hair-color" type="color" value="#30243b"></label>
+            </div>
+            <span class="option-label">Haare</span>
+            <div class="choice-row hair-choices">
+              <label><input type="radio" name="hair-style" value="none"><span>Ohne</span></label>
+              <label><input type="radio" name="hair-style" value="short" checked><span>Kurz</span></label>
+              <label><input type="radio" name="hair-style" value="bob"><span>Bob</span></label>
+              <label><input type="radio" name="hair-style" value="mohawk"><span>Mohawk</span></label>
+            </div>
+            <span class="option-label">Kleidungsstil</span>
+            <div class="choice-row outfit-choices">
+              <label><input type="radio" name="outfit-style" value="rogue" checked><span>Rogue</span></label>
+              <label><input type="radio" name="outfit-style" value="explorer"><span>Explorer</span></label>
+              <label><input type="radio" name="outfit-style" value="cyber"><span>Cyber</span></label>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="entry-tabs" role="tablist" aria-label="Raumzugang">
+          <button type="button" class="active" id="create-mode-button" data-entry-mode="create" role="tab" aria-selected="true">Raum erstellen</button>
+          <button type="button" id="join-mode-button" data-entry-mode="join" role="tab" aria-selected="false">Raum beitreten</button>
+        </div>
+
+        <section class="entry-panel" id="create-panel" data-entry-panel="create">
+          <label for="room-name">Name des Raums</label>
+          <input id="room-name" name="room-name" maxlength="48" placeholder="z. B. Kuble Townhall">
+          <p>Du wirst automatisch Host und erhältst separate Codes für Guests und Cohosts.</p>
+        </section>
+
+        <section class="entry-panel" id="join-panel" data-entry-panel="join" hidden>
+          <label for="invite-code">Invite-Code</label>
+          <div class="input-prefix"><span>⌁</span><input id="invite-code" name="invite-code" maxlength="24" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="GUEST-XXXX-XXXX"></div>
+          <p>Deine Rolle wird automatisch durch den Invite-Code bestimmt.</p>
+        </section>
+
+        <p class="form-error" id="join-error" role="alert"></p>
+        <button class="enter-button" type="submit"><span>Eigenen Raum erstellen</span><b>↗</b></button>
+        <small class="privacy-note">Ein Raum · maximal 25 Personen · invite only</small>
+      </form>
+    </dialog>
+
+    <dialog id="invite-dialog" class="invite-dialog">
+      <form method="dialog">
+        <button class="icon-button close-dialog" value="cancel" aria-label="Einladungen schliessen">×</button>
+        <span class="eyebrow">INVITE PEOPLE</span>
+        <h2>Deine Raum-Codes</h2>
+        <p>Teile den passenden Code. Die Rolle wird beim Beitritt automatisch gesetzt.</p>
+        <div class="invite-code-card">
+          <span>GUEST CODE</span>
+          <strong id="guest-invite-code">••••-••••-••••</strong>
+          <button type="button" data-copy-invite="guest">Guest-Code kopieren</button>
+          <small>Bewegen, chatten und reagieren</small>
+        </div>
+        <div class="invite-code-card cohost">
+          <span>COHOST CODE</span>
+          <strong id="cohost-invite-code">••••-••••-••••</strong>
+          <button type="button" data-copy-invite="cohost">Cohost-Code kopieren</button>
+          <small>Zusätzlich Voice, Screenshare, Seat all und Lock</small>
+        </div>
+        <p class="invite-warning">Cohost-Codes nur mit Personen teilen, denen du die Raumkontrolle anvertrauen möchtest.</p>
+      </form>
+    </dialog>
+
+    <dialog id="portal-dialog" class="portal-dialog">
+      <form id="portal-form">
+        <button class="icon-button close-dialog" type="button" data-close-dialog="portal-dialog" aria-label="Portalverwaltung schliessen">×</button>
+        <span class="eyebrow">SPACE LINKS</span>
+        <h2>Portale</h2>
+        <p>Verbinde diesen Raum mit einem anderen Space. Personen wechseln durch das Portal automatisch als Guest.</p>
+        <label for="portal-label">Portalname</label>
+        <input id="portal-label" name="label" maxlength="32" placeholder="z. B. Zur Rooftop Lounge" required>
+        <label for="portal-target-code">Guest-Code des Zielraums</label>
+        <input id="portal-target-code" name="target-code" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="GUEST-XXXX-XXXX" required>
+        <p class="form-error" id="portal-error" role="alert"></p>
+        <button class="enter-button portal-create-button" type="submit"><span>3D-Portal erstellen</span><b>＋</b></button>
+        <div class="portal-list" id="portal-list" aria-label="Portale in diesem Raum"></div>
+      </form>
+    </dialog>
+
+    <dialog id="help-dialog" class="help-dialog">
+      <form method="dialog">
+        <button class="icon-button close-dialog" value="cancel" aria-label="Hilfe schliessen">×</button>
+        <span class="eyebrow">QUICK GUIDE</span>
+        <h2>So bewegst du dich</h2>
+        <div class="guide-grid">
+          <div><strong>W A S D</strong><span>Durch die Welt gehen</span></div>
+          <div><strong>SPACE × 2</strong><span>Springen und Double-Jump mit Salto</span></div>
+          <div><strong>Maus</strong><span>Ziehen, um die Kamera zu drehen</span></div>
+          <div><strong>☺</strong><span>Clap, Hearts und weitere Reaktionen</span></div>
+          <div><strong>HOST CONTROL</strong><span>Seat all sowie Sitzplätze sperren und freigeben</span></div>
+          <div><strong>@Name</strong><span>Personen im Chat erwähnen</span></div>
+          <div><strong>Host</strong><span>Mikrofon und Bildschirm an alle senden</span></div>
+        </div>
+      </form>
+    </dialog>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

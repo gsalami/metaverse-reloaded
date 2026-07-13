@@ -1,0 +1,20 @@
+{
+  "name": "metaverse-reloaded",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Browserbasiertes Multiuser-Metaverse für bis zu 25 Personen.",
+  "license": "MIT",
+  "scripts": {
+    "test": "npm run test:static && npm run test:browser && npm run test:capacity && npm run test:portal && npm run test:multiuser",
+    "test:static": "node tests/static-check.mjs",
+    "test:browser": "node tests/browser-smoke.mjs",
+    "test:capacity": "node tests/capacity-smoke.mjs",
+    "test:portal": "node tests/portal-smoke.mjs",
+    "test:multiuser": "node tests/multiuser-smoke.mjs",
+    "test:todos": "node tests/todos-smoke.mjs",
+    "test:mobile-live": "node tests/mobile-live-smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Metaverse Reloaded · TODO Board</title>
+  <link rel="stylesheet" href="todos.css">
+</head>
+<body>
+  <header class="board-header">
+    <div>
+      <a class="back-link" href="./">← Metaverse Reloaded</a>
+      <p class="eyebrow">PROJECT CONTROL</p>
+      <h1>TODO Board</h1>
+      <p class="intro">Alle Aufgaben und ihr aktueller Umsetzungsstatus an einem Ort.</p>
+    </div>
+
+    <div class="header-actions">
+      <div class="sync-state" id="sync-state" role="status" aria-live="polite">
+        <span class="sync-dot" aria-hidden="true"></span>
+        <span id="sync-label">Synchronisiere…</span>
+      </div>
+      <button class="primary-button" id="new-task-button" type="button">+ Aufgabe</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary" aria-label="Projektübersicht">
+      <div><strong id="task-total">0</strong><span>Aufgaben</span></div>
+      <div><strong id="task-active">0</strong><span>Aktiv</span></div>
+      <div><strong id="task-done">0</strong><span>Erledigt</span></div>
+      <div><strong id="task-progress">0%</strong><span>Fortschritt</span></div>
+    </section>
+
+    <section class="board" id="todo-board" aria-label="Kanban Board">
+      <article class="column" data-status="Offen">
+        <header><span class="status-mark open"></span><h2>Offen</h2><span class="count">0</span></header>
+        <div class="task-list" data-task-list="Offen"></div>
+      </article>
+      <article class="column" data-status="In Arbeit">
+        <header><span class="status-mark active"></span><h2>In Arbeit</h2><span class="count">0</span></header>
+        <div class="task-list" data-task-list="In Arbeit"></div>
+      </article>
+      <article class="column" data-status="Blockiert">
+        <header><span class="status-mark blocked"></span><h2>Blockiert</h2><span class="count">0</span></header>
+        <div class="task-list" data-task-list="Blockiert"></div>
+      </article>
+      <article class="column" data-status="Geplant">
+        <header><span class="status-mark planned"></span><h2>Geplant</h2><span class="count">0</span></header>
+        <div class="task-list" data-task-list="Geplant"></div>
+      </article>
+      <article class="column" data-status="Erledigt">
+        <header><span class="status-mark done"></span><h2>Erledigt</h2><span class="count">0</span></header>
+        <div class="task-list" data-task-list="Erledigt"></div>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="task-dialog">
+    <form id="task-form">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">NEUER EINTRAG</p><h2>Aufgabe anlegen</h2></div>
+        <button class="icon-button" id="close-task-dialog" type="button" aria-label="Schliessen">×</button>
+      </div>
+
+      <label>Titel<input id="task-title" name="title" maxlength="140" required autocomplete="off"></label>
+      <div class="form-row">
+        <label>Status
+          <select id="task-status" name="status">
+            <option>Offen</option><option>In Arbeit</option><option>Blockiert</option><option>Geplant</option><option>Erledigt</option>
+          </select>
+        </label>
+        <label>Priorität
+          <select id="task-priority" name="priority">
+            <option>Hoch</option><option selected>Mittel</option><option>Niedrig</option>
+          </select>
+        </label>
+      </div>
+      <label>Notiz<textarea id="task-note" name="note" rows="4" maxlength="600" placeholder="Kontext, offene Entscheidung oder nächster Schritt"></textarea></label>
+      <p class="form-error" id="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="cancel-task" type="button">Abbrechen</button>
+        <button class="primary-button" type="submit">Aufgabe speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="task-card-template">
+    <article class="task-card">
+      <div class="card-meta"><span class="priority"></span><time></time></div>
+      <h3></h3>
+      <p class="task-note"></p>
+      <label class="status-control">Status
+        <select aria-label="Status ändern">
+          <option>Offen</option><option>In Arbeit</option><option>Blockiert</option><option>Geplant</option><option>Erledigt</option>
+        </select>
+      </label>
+    </article>
+  </template>
+
+  <script src="todos.js" defer></script>
+</body>
+</html>
