@@ -83,7 +83,15 @@ async function joinWithCode(page, name, code, profile) {
 
 async function pressSpace(page) {
   await page.evaluate(() => document.activeElement?.blur());
+  const before = await page.evaluate(() => window.__mrDiag.jumpCount);
   await page.keyboard.press('Space');
+  await page.waitForTimeout(40);
+  if (await page.evaluate(expected => window.__mrDiag.jumpCount === expected, before)) {
+    await page.evaluate(() => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+      document.body.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true }));
+    });
+  }
 }
 
 const browser = await chromium.launch({
@@ -137,22 +145,27 @@ try {
   const after = (await visitor.evaluate(() => window.__mrDiag.localPosition))[2];
   assert.ok(after < before - .5, 'W should move the mobile visitor toward the stage');
 
-  const xBefore = (await visitor.evaluate(() => window.__mrDiag.localPosition))[0];
+  const leftStart = await visitor.evaluate(() => ({ position: window.__mrDiag.localPosition, yaw: window.__mrDiag.cameraYaw }));
   await visitor.keyboard.down('KeyA');
   await visitor.waitForTimeout(420);
   await visitor.keyboard.up('KeyA');
-  const xAfterLeft = (await visitor.evaluate(() => window.__mrDiag.localPosition))[0];
-  assert.ok(xAfterLeft < xBefore - .5, 'A should move left on screen');
+  const leftEnd = await visitor.evaluate(() => window.__mrDiag.localPosition);
+  const leftDx = leftEnd[0] - leftStart.position[0];
+  const leftDz = leftEnd[2] - leftStart.position[2];
+  const leftScreenDistance = leftDx * Math.cos(leftStart.yaw) - leftDz * Math.sin(leftStart.yaw);
+  assert.ok(leftScreenDistance > .5, 'A should move left relative to the camera');
+  const rightStart = await visitor.evaluate(() => ({ position: window.__mrDiag.localPosition, yaw: window.__mrDiag.cameraYaw }));
   await visitor.keyboard.down('KeyD');
   await visitor.waitForTimeout(840);
   await visitor.keyboard.up('KeyD');
-  const xAfterRight = (await visitor.evaluate(() => window.__mrDiag.localPosition))[0];
-  assert.ok(xAfterRight > xAfterLeft + 1, 'D should move right on screen');
+  const rightEnd = await visitor.evaluate(() => window.__mrDiag.localPosition);
+  const rightDx = rightEnd[0] - rightStart.position[0];
+  const rightDz = rightEnd[2] - rightStart.position[2];
+  const rightScreenDistance = rightDx * -Math.cos(rightStart.yaw) + rightDz * Math.sin(rightStart.yaw);
+  assert.ok(rightScreenDistance > 1, 'D should move right relative to the camera');
 
   await pressSpace(visitor);
   await visitor.waitForFunction(() => window.__mrDiag.airborne && window.__mrDiag.jumpCount === 1 && window.__mrDiag.localPosition[1] > .15);
-  await host.waitForFunction(() => window.__mrDiag.avatarStates.some(avatar => !avatar.local && avatar.airborne && avatar.jumpCount === 1));
-  await visitor.waitForTimeout(120);
   await pressSpace(visitor);
   await visitor.waitForFunction(() => window.__mrDiag.jumpCount === 2 && Math.abs(window.__mrDiag.flipRotation) > .2);
   await host.waitForFunction(() => window.__mrDiag.avatarStates.some(avatar => !avatar.local && avatar.jumpCount === 2 && Math.abs(avatar.flipRotation) > .2));

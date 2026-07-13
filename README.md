@@ -15,6 +15,7 @@
 - neutraler Basis-Body ohne sichtbare eingebackene Haare oder Kleidung
 - Avatar-Konfigurator mit Outfitfarbe, Haarfarbe, vier Haarmodulen und drei animierten 3D-Outfitmodulen
 - kamera-relative Navigation, Jump und Double-Jump mit Salto
+- weiche Third-Person-Kamera, die sich beim Laufen automatisch hinter dem Avatar ausrichtet
 - synchronisierte Reaktionen wie Clap, Hearts, Celebrate, Wave und Laugh
 - Host-Raumkontrolle: `Seat all` setzt und sperrt nur Guests; Host und Cohosts bleiben beweglich
 - eindeutige Räume mit getrennten Guest- und Cohost-Invite-Codes
@@ -88,6 +89,7 @@ python3 -m http.server 8899
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
 - `npm run test:templates`: zehn Designs, Persistenz, Deep-Link-Join und Fallback für ältere Räume
 - `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
+- `npm run test:camera-follow`: automatische Kameraausrichtung bei WASD und freies Drehen im Stand
 - `node tests/ten-person-smoke.mjs`: WebRTC-Mesh-Regression mit zehn Personen
 - `node tests/capacity-smoke.mjs`: 25 Personen, Guest-only Seat all mit Auto-Lock und Ablehnung der 26. Person
 - `node tests/mobile-live-smoke.mjs`: echter mobiler Live-Beitritt, Touch-Bewegung und Chat

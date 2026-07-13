@@ -17,6 +17,7 @@ const INITIAL_TASKS = [
   ['recent-spaces-portal-feedback', 'Portal-Feedback und zuletzt besuchte Spaces', 'Erledigt', 'Hoch', 'Portalankunft benennt den neuen Space; die lokale Besuchshistorie ermöglicht die Rückkehr ohne Portal.'],
   ['mobile-room-create-keyboard', 'Mobile Raum-Erstellung bei offener Tastatur', 'Erledigt', 'Hoch', 'Der Dialog folgt dem iOS-VisualViewport, verhindert Safari-Autozoom und hält den Erstellen-Button erreichbar.'],
   ['ad999b7d-a1a0-4070-9f11-ec11c436b3ff', '10 weitere Raum-Templates', 'Erledigt', 'Mittel', 'Zehn mobile-fähige Designs sind bei der Raumerstellung auswählbar und werden pro Raum für Guests, Deep Links und Portale gespeichert.'],
+  ['camera-auto-follow', 'Kamera beim Laufen automatisch hinter dem Avatar', 'Erledigt', 'Hoch', 'Bei WASD und mobiler Bewegung folgt die Third-Person-Kamera weich der Blickrichtung; freies Kameradrehen bleibt im Stand möglich.'],
   ['accounts-metaverses', 'Sichere Accounts und eigene Metaverses', 'Geplant', 'Hoch', 'Account-System mit Besitz, Mitgliedschaften, Rollen und Verwaltung eigener Metaverses serverseitig absichern.']
 ];
 

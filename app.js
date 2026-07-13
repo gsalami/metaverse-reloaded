@@ -62,6 +62,7 @@ const EMOTES = {
 const GRAVITY = 16.5;
 const FIRST_JUMP_VELOCITY = 7.1;
 const DOUBLE_JUMP_VELOCITY = 6.4;
+const CAMERA_FOLLOW_DAMPING = 12;
 const MOBILE = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
 
 const state = {
@@ -97,6 +98,8 @@ const state = {
   cameraYaw: Math.PI,
   cameraPitch: .42,
   cameraDistance: MOBILE ? 11.5 : 11,
+  movementReferenceYaw: null,
+  moving: false,
   dragging: false,
   dragX: 0,
   dragY: 0,
@@ -1716,7 +1719,11 @@ function lerpAngle(a, b, t) {
 }
 
 function updateLocalMovement(dt) {
-  if (!state.joined || !world.local) return;
+  if (!state.joined || !world.local) {
+    state.moving = false;
+    state.movementReferenceYaw = null;
+    return;
+  }
   let forward = 0;
   let side = 0;
   if (state.keys.has('KeyW') || state.keys.has('ArrowUp')) forward += 1;
@@ -1724,17 +1731,21 @@ function updateLocalMovement(dt) {
   if (state.keys.has('KeyA') || state.keys.has('ArrowLeft')) side -= 1;
   if (state.keys.has('KeyD') || state.keys.has('ArrowRight')) side += 1;
   const moving = forward !== 0 || side !== 0;
+  state.moving = moving;
   if (world.local.seated) {
     if (world.local.seatLocked || !moving) {
+      state.moving = false;
+      state.movementReferenceYaw = null;
       if (!world.local.emote) setAvatarAction(world.local, 'sit');
       return;
     }
     releaseSeat(world.local);
   }
   if (moving) {
+    if (state.movementReferenceYaw === null) state.movementReferenceYaw = state.cameraYaw;
     const input = new THREE.Vector2(side, forward).normalize();
-    const sin = Math.sin(state.cameraYaw);
-    const cos = Math.cos(state.cameraYaw);
+    const sin = Math.sin(state.movementReferenceYaw);
+    const cos = Math.cos(state.movementReferenceYaw);
     const dx = (-input.x * cos + input.y * sin) * 4.2 * dt;
     const dz = (input.x * sin + input.y * cos) * 4.2 * dt;
     const nextX = THREE.MathUtils.clamp(world.local.root.position.x + dx, -18.5, 18.5);
@@ -1742,8 +1753,9 @@ function updateLocalMovement(dt) {
     world.local.root.position.set(nextX, world.local.root.position.y, nextZ);
     world.local.root.rotation.y = Math.atan2(dx, dz);
     if (!world.local.emote) setAvatarAction(world.local, world.local.airborne ? 'idle' : 'walk');
-  } else if (!world.local.emote) {
-    setAvatarAction(world.local, 'idle');
+  } else {
+    state.movementReferenceYaw = null;
+    if (!world.local.emote) setAvatarAction(world.local, 'idle');
   }
 
   const now = performance.now();
@@ -1755,6 +1767,10 @@ function updateLocalMovement(dt) {
 
 function updateCamera(dt) {
   const target = world.local?.root.position || new THREE.Vector3(0, 0, 2);
+  if (state.moving && world.local && !world.local.seatLocked) {
+    const followBlend = 1 - Math.exp(-CAMERA_FOLLOW_DAMPING * dt);
+    state.cameraYaw = lerpAngle(state.cameraYaw, world.local.root.rotation.y, followBlend);
+  }
   const horizontal = Math.cos(state.cameraPitch) * state.cameraDistance;
   const desired = new THREE.Vector3(
     target.x - Math.sin(state.cameraYaw) * horizontal,
@@ -2599,6 +2615,11 @@ function bindUi() {
     if (event.code === 'Slash' && event.shiftKey) ui.help.showModal();
   });
   addEventListener('keyup', event => state.keys.delete(event.code));
+  addEventListener('blur', () => {
+    state.keys.clear();
+    state.moving = false;
+    state.movementReferenceYaw = null;
+  });
   addEventListener('pointerdown', unlockAudio, { passive: true });
   addEventListener('beforeunload', leaveEvent);
   addEventListener('pagehide', leaveEvent);
@@ -2622,7 +2643,7 @@ function bindUi() {
     if (!state.dragging) return;
     const dx = event.clientX - state.dragX;
     const dy = event.clientY - state.dragY;
-    state.cameraYaw -= dx * .006;
+    if (!state.moving) state.cameraYaw -= dx * .006;
     state.cameraPitch = THREE.MathUtils.clamp(state.cameraPitch + dy * .004, .12, .82);
     state.dragX = event.clientX;
     state.dragY = event.clientY;
@@ -2681,6 +2702,14 @@ Object.defineProperty(window, '__mrDiag', {
       micLive: Boolean(state.micStream),
       screenLive: Boolean(state.screenStream),
       localPosition: world.local ? world.local.root.position.toArray() : null,
+      cameraPosition: camera.position.toArray(),
+      cameraYaw: state.cameraYaw,
+      avatarRotation: world.local?.root.rotation.y ?? null,
+      cameraMoving: state.moving,
+      movementReferenceYaw: state.movementReferenceYaw,
+      cameraFollowAngleError: world.local
+        ? Math.abs(Math.atan2(Math.sin(state.cameraYaw - world.local.root.rotation.y), Math.cos(state.cameraYaw - world.local.root.rotation.y)))
+        : null,
       airborne: Boolean(world.local?.airborne),
       jumpCount: world.local?.jumpCount || 0,
       flipRotation: world.local?.flipPivot.rotation.x || 0,

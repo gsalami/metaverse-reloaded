@@ -106,12 +106,16 @@ try {
 
   const portalPosition = await guest.evaluate(() => window.__mrDiag.portalTargets[0].position);
   for (let attempt = 0; attempt < 70; attempt++) {
-    const position = await guest.evaluate(() => window.__mrDiag.localPosition);
+    const { position, yaw } = await guest.evaluate(() => ({ position: window.__mrDiag.localPosition, yaw: window.__mrDiag.cameraYaw }));
     const dx = portalPosition[0] - position[0];
     const dz = portalPosition[2] - position[2];
     if (Math.hypot(dx, dz) < 2.5) break;
-    if (Math.abs(dx) > .65) await hold(guest, dx < 0 ? 'KeyA' : 'KeyD', 220);
-    else await hold(guest, dz < 0 ? 'KeyW' : 'KeyS', 220);
+    const forward = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+    const right = dx * -Math.cos(yaw) + dz * Math.sin(yaw);
+    const key = Math.abs(forward) >= Math.abs(right)
+      ? forward >= 0 ? 'KeyW' : 'KeyS'
+      : right >= 0 ? 'KeyD' : 'KeyA';
+    await hold(guest, key, 220);
   }
   await guest.waitForSelector('#portal-prompt:not([hidden])', { timeout: 5_000 });
   await guest.click('#portal-prompt');
