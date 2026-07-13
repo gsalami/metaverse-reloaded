@@ -3094,7 +3094,7 @@ async function requestCreateMagicLink() {
     redirect.hash = '';
     const result = await signInWithMagicLink(email, redirect.toString());
     if (result?.error) throw result.error;
-    updateCreateAuthUi(`Magic Link an ${email} gesendet. Öffne die E-Mail auf diesem Gerät.`);
+    updateCreateAuthUi(`Magic Link an ${email} gesendet. Öffne die E-Mail auf diesem Gerät und prüfe auch deinen Spam-Ordner.`);
   } catch (error) {
     updateCreateAuthUi(error.message || 'Der Magic Link konnte nicht gesendet werden.');
   } finally {

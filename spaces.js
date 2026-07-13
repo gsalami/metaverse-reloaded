@@ -356,7 +356,7 @@ elements.magicLinkForm.addEventListener('submit', async event => {
     const result = await signInWithMagicLink(email, new URL('/spaces.html', window.location.origin).href);
     if (result?.error) throw result.error;
     elements.accountEmail.value = '';
-    setAccountStatus(`Magic Link an ${email} gesendet. Bitte prüfe dein Postfach.`);
+    setAccountStatus(`Magic Link an ${email} gesendet. Bitte prüfe dein Postfach und auch deinen Spam-Ordner.`);
   } catch (error) {
     setAccountStatus(error.message || 'Magic Link konnte nicht gesendet werden.', true);
   } finally {
