@@ -103,6 +103,10 @@ const state = {
   movementReferenceYaw: null,
   moving: false,
   dragging: false,
+  pointerStartX: 0,
+  pointerStartY: 0,
+  pointerMoved: false,
+  hoveredSeatIndex: -1,
   dragX: 0,
   dragY: 0,
   audioBlocked: false
@@ -527,6 +531,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = !MOBILE;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const seatRaycaster = new THREE.Raycaster();
+const seatPointer = new THREE.Vector2();
 
 const clock = new THREE.Clock();
 const world = {
@@ -961,21 +968,25 @@ function buildSeating(template = SPACE_TEMPLATES[DEFAULT_SPACE_TEMPLATE]) {
       const angle = Math.PI * (row.start + row.span * progress);
       const x = Math.cos(angle) * row.radius;
       const z = row.zOffset + Math.sin(angle) * row.radius * .55;
+      const seatIndex = world.seats.length;
       const seat = new THREE.Group();
+      seat.userData.seatIndex = seatIndex;
       const base = new THREE.Mesh(new THREE.CylinderGeometry(.85, 1.05, .28, 16), seatMaterial);
       base.position.y = .14;
       base.castShadow = !MOBILE;
+      base.userData.seatIndex = seatIndex;
       seat.add(base);
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(.82, .025, 6, 32), glowMaterial);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(.82, .025, 6, 32), glowMaterial.clone());
       ring.rotation.x = Math.PI / 2;
       ring.position.y = .3;
+      ring.userData.seatIndex = seatIndex;
       seat.add(ring);
       seat.position.set(x, 0, z);
       // Avatar movement defines local +Z as forward. Use the same explicit yaw
       // here so every seated avatar faces the physical centre of the screen.
       seat.rotation.y = yawTowardStage(x, z);
       scene.add(seat);
-      world.seats.push({ x, y: .3, z, rotation: seat.rotation.y });
+      world.seats.push({ x, y: .3, z, rotation: seat.rotation.y, group: seat, hitTarget: base, ring, occupiedBy: '' });
     }
   }
 }
@@ -1684,6 +1695,151 @@ function setAvatarAction(avatar, next) {
   avatar.clip = next;
 }
 
+function participantRole(clientId) {
+  if (clientId === state.clientId) return state.role;
+  return state.people.get(clientId)?.role || world.avatars.get(clientId)?.person?.role || '';
+}
+
+function seatOccupant(seatIndex) {
+  for (const [clientId, assignedSeatIndex] of state.seatAssignments) {
+    if (assignedSeatIndex === seatIndex) return clientId;
+  }
+  return '';
+}
+
+function seatAuthorityId() {
+  const candidates = [{ clientId: state.clientId, role: state.role }];
+  for (const [clientId, peer] of state.peers) {
+    if (peer.channel?.readyState !== 'open') continue;
+    candidates.push({ clientId, role: participantRole(clientId) });
+  }
+  return candidates
+    .filter(candidate => candidate.role)
+    .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.clientId.localeCompare(b.clientId))[0]?.clientId || state.clientId;
+}
+
+function isSeatAuthority() {
+  return seatAuthorityId() === state.clientId;
+}
+
+function updateSeatVisuals() {
+  const template = SPACE_TEMPLATES[state.templateId] || SPACE_TEMPLATES[DEFAULT_SPACE_TEMPLATE];
+  for (const [index, seat] of world.seats.entries()) {
+    const occupiedBy = seatOccupant(index);
+    const hovered = index === state.hoveredSeatIndex;
+    seat.occupiedBy = occupiedBy;
+    seat.group.userData.occupiedBy = occupiedBy;
+    seat.ring.material.color.setHex(occupiedBy ? template.secondary : template.primary);
+    seat.ring.material.opacity = occupiedBy ? .82 : hovered ? .9 : .24;
+    seat.ring.scale.setScalar(occupiedBy ? 1.08 : hovered ? 1.14 : 1);
+  }
+}
+
+function seatStatePayload() {
+  return {
+    t: 'seat-state',
+    authorityId: state.clientId,
+    assignments: [...state.seatAssignments.entries()].map(([clientId, seatIndex]) => ({
+      clientId,
+      seatIndex,
+      role: participantRole(clientId)
+    }))
+  };
+}
+
+function applySeatAssignments(assignments) {
+  const next = new Map();
+  const usedSeats = new Set();
+  for (const assignment of assignments || []) {
+    const clientId = String(assignment.clientId || '');
+    const seatIndex = Number(assignment.seatIndex);
+    const role = participantRole(clientId) || assignment.role;
+    if (!clientId || !['host', 'cohost', 'guest'].includes(role) || !world.seats[seatIndex] || usedSeats.has(seatIndex)) continue;
+    next.set(clientId, seatIndex);
+    usedSeats.add(seatIndex);
+  }
+  state.seatAssignments.clear();
+  for (const [clientId, seatIndex] of next) state.seatAssignments.set(clientId, seatIndex);
+  for (const [clientId, avatar] of world.avatars) {
+    const seatIndex = state.seatAssignments.get(clientId);
+    if (seatIndex === undefined) {
+      if (avatar.seated) releaseSeat(avatar, true);
+      continue;
+    }
+    setSeatState(avatar, seatIndex, state.roomLocked && participantRole(clientId) === 'guest');
+  }
+  updateSeatVisuals();
+}
+
+function publishSeatState() {
+  const payload = seatStatePayload();
+  applySeatAssignments(payload.assignments);
+  broadcastData(payload);
+}
+
+function sendSeatResult(clientId, ok, message = '') {
+  if (clientId === state.clientId) {
+    if (message) notify(message, ok ? 'success' : 'error');
+    return;
+  }
+  const channel = state.peers.get(clientId)?.channel;
+  if (channel?.readyState === 'open') channel.send(JSON.stringify({ t: 'seat-result', ok, message }));
+}
+
+function processSeatRequest(clientId, requestedSeatIndex) {
+  if (!isSeatAuthority()) return;
+  const role = participantRole(clientId);
+  const currentSeatIndex = state.seatAssignments.get(clientId);
+  const seatIndex = Number(requestedSeatIndex);
+  if (!['host', 'cohost', 'guest'].includes(role)) return;
+
+  if (!Number.isInteger(seatIndex) || seatIndex < 0) {
+    if (state.roomLocked && role === 'guest') {
+      sendSeatResult(clientId, false, 'Dein Sitzplatz ist vom Host gesperrt.');
+      return;
+    }
+    state.seatAssignments.delete(clientId);
+    const avatar = world.avatars.get(clientId);
+    if (avatar?.seated) releaseSeat(avatar, true);
+    publishSeatState();
+    sendSeatResult(clientId, true, 'Du bist aufgestanden.');
+    return;
+  }
+
+  if (!world.seats[seatIndex]) {
+    sendSeatResult(clientId, false, 'Dieser Sitzplatz ist nicht verfügbar.');
+    return;
+  }
+  if (state.roomLocked && role === 'guest' && currentSeatIndex !== seatIndex) {
+    sendSeatResult(clientId, false, 'Die Guest-Sitzplätze sind vom Host gesperrt.');
+    return;
+  }
+  const occupiedBy = seatOccupant(seatIndex);
+  if (occupiedBy && occupiedBy !== clientId) {
+    sendSeatResult(clientId, false, 'Dieser Sitzplatz ist bereits besetzt.');
+    return;
+  }
+  state.seatAssignments.set(clientId, seatIndex);
+  setSeatState(world.avatars.get(clientId), seatIndex, state.roomLocked && role === 'guest');
+  publishSeatState();
+  sendSeatResult(clientId, true, 'Sitzplatz ausgewählt.');
+}
+
+function requestSeatChoice(seatIndex) {
+  const authorityId = seatAuthorityId();
+  if (authorityId === state.clientId) {
+    processSeatRequest(state.clientId, seatIndex);
+    return true;
+  }
+  const channel = state.peers.get(authorityId)?.channel;
+  if (channel?.readyState !== 'open') {
+    notify('Der Sitzplatz kann gerade nicht reserviert werden.', 'error');
+    return false;
+  }
+  channel.send(JSON.stringify({ t: 'seat-request', seatIndex }));
+  return true;
+}
+
 function setSeatState(avatar, seatIndex, locked) {
   const seat = world.seats[seatIndex];
   if (!avatar || !seat) return;
@@ -1701,6 +1857,7 @@ function setSeatState(avatar, seatIndex, locked) {
   avatar.root.userData.target.set(seat.x, seat.y, seat.z);
   avatar.root.rotation.y = seat.rotation;
   avatar.root.userData.targetRotation = seat.rotation;
+  if (avatar.local) state.cameraYaw = seat.rotation;
   if (!avatar.emote) setAvatarAction(avatar, 'sit');
 }
 
@@ -1714,6 +1871,7 @@ function releaseSeat(avatar, force = false) {
   avatar.root.userData.target.y = 0;
   avatar.lockSprite.visible = false;
   if (!avatar.emote) setAvatarAction(avatar, 'idle');
+  updateSeatVisuals();
   return true;
 }
 
@@ -1740,22 +1898,7 @@ function updateRoomControlUi() {
 
 function applyRoomControl(payload) {
   state.roomLocked = Boolean(payload.locked);
-  state.seatAssignments.clear();
-  for (const assignment of payload.assignments || []) {
-    const seatIndex = Number(assignment.seatIndex);
-    const knownRole = assignment.clientId === state.clientId
-      ? state.role
-      : state.people.get(assignment.clientId)?.role || world.avatars.get(assignment.clientId)?.person?.role;
-    const role = knownRole || assignment.role;
-    if (role !== 'guest' || !world.seats[seatIndex]) continue;
-    state.seatAssignments.set(assignment.clientId, seatIndex);
-  }
-  for (const [clientId, seatIndex] of state.seatAssignments) {
-    setSeatState(world.avatars.get(clientId), seatIndex, state.roomLocked);
-  }
-  for (const [clientId, avatar] of world.avatars) {
-    if (!state.seatAssignments.has(clientId) && avatar.seated) releaseSeat(avatar, true);
-  }
+  applySeatAssignments(payload.assignments);
   updateRoomControlUi();
 }
 
@@ -1770,8 +1913,21 @@ function guestParticipantIds() {
 }
 
 function assignSeatsToCurrentPeople() {
+  const controllerAssignments = [...state.seatAssignments.entries()]
+    .filter(([clientId, seatIndex]) => participantRole(clientId) !== 'guest' && world.seats[seatIndex]);
   state.seatAssignments.clear();
-  guestParticipantIds().forEach((clientId, seatIndex) => state.seatAssignments.set(clientId, seatIndex));
+  const usedSeats = new Set();
+  for (const [clientId, seatIndex] of controllerAssignments) {
+    if (usedSeats.has(seatIndex)) continue;
+    state.seatAssignments.set(clientId, seatIndex);
+    usedSeats.add(seatIndex);
+  }
+  for (const clientId of guestParticipantIds()) {
+    const seatIndex = world.seats.findIndex((_, index) => !usedSeats.has(index));
+    if (seatIndex < 0) break;
+    state.seatAssignments.set(clientId, seatIndex);
+    usedSeats.add(seatIndex);
+  }
 }
 
 function publishRoomControl(message) {
@@ -1784,13 +1940,13 @@ function seatAllPeople() {
   if (!isHostRole()) return;
   assignSeatsToCurrentPeople();
   state.roomLocked = true;
-  const count = state.seatAssignments.size;
+  const count = [...state.seatAssignments.keys()].filter(clientId => participantRole(clientId) === 'guest').length;
   publishRoomControl(count === 1 ? '1 Guest wurde gesetzt und gesperrt.' : `${count} Guests wurden gesetzt und gesperrt.`);
 }
 
 function lockAllSeats() {
   if (!isHostRole()) return;
-  if (!state.seatAssignments.size) assignSeatsToCurrentPeople();
+  assignSeatsToCurrentPeople();
   state.roomLocked = true;
   publishRoomControl('Guest-Sitzplätze gesperrt. Hosts und Cohosts bleiben beweglich.');
 }
@@ -1822,7 +1978,6 @@ function requestJump() {
     notify('Der Host hat die Sitzplätze gesperrt.');
     return false;
   }
-  if (avatar.seated) releaseSeat(avatar);
   if (!avatar.airborne) return startAvatarJump(avatar, false, true);
   if (avatar.jumpCount === 1) return startAvatarJump(avatar, true, true);
   return false;
@@ -1831,7 +1986,10 @@ function requestJump() {
 function startAvatarJump(avatar, doubleJump = false, shouldBroadcast = false) {
   if (!avatar) return false;
   if (avatar.seatLocked) return false;
-  if (avatar.seated) releaseSeat(avatar);
+  if (avatar.seated) {
+    if (avatar.local) requestSeatChoice(-1);
+    releaseSeat(avatar);
+  }
   if (!doubleJump && avatar.airborne) return false;
   if (doubleJump && avatar.jumpCount >= 2) return false;
   avatar.airborne = true;
@@ -1952,6 +2110,8 @@ function removeAvatar(clientId) {
   if (!avatar || avatar.local) return;
   scene.remove(avatar.root);
   world.avatars.delete(clientId);
+  if (isSeatAuthority() && state.seatAssignments.delete(clientId)) publishSeatState();
+  else updateSeatVisuals();
 }
 
 function applyStageVideo() {
@@ -2040,6 +2200,7 @@ function updateLocalMovement(dt) {
       if (!world.local.emote) setAvatarAction(world.local, 'sit');
       return;
     }
+    requestSeatChoice(-1);
     releaseSeat(world.local);
   }
   if (moving) {
@@ -2399,6 +2560,10 @@ function bindDataChannel(peer, channel) {
       const payload = roomControlPayload();
       applyRoomControl(payload);
       broadcastData(payload);
+    } else if (isSeatAuthority() && state.seatAssignments.size) {
+      channel.send(JSON.stringify(seatStatePayload()));
+    } else if (peer.id === seatAuthorityId() && world.local?.seated) {
+      channel.send(JSON.stringify({ t: 'seat-request', seatIndex: world.local.seatIndex }));
     }
   };
   channel.onmessage = event => {
@@ -2408,7 +2573,10 @@ function bindDataChannel(peer, channel) {
       if (data.t === 'move') {
         const avatar = world.avatars.get(peer.id);
         if (avatar && !avatar.seatLocked) {
-          if (avatar.seated) releaseSeat(avatar);
+          if (avatar.seated) {
+            releaseSeat(avatar);
+            if (isSeatAuthority()) publishSeatState();
+          }
           const target = clampRoomPosition(Number(data.x) || 0, Number(data.z) || 0);
           avatar.root.userData.target.set(target.x, 0, target.z);
           avatar.root.userData.targetRotation = Number(data.r) || 0;
@@ -2419,6 +2587,12 @@ function bindDataChannel(peer, channel) {
         triggerEmote(data.emote, world.avatars.get(peer.id), false);
       } else if (data.t === 'room-control' && hostRoleForPeer(peer.id)) {
         applyRoomControl(data);
+      } else if (data.t === 'seat-request' && isSeatAuthority()) {
+        processSeatRequest(peer.id, data.seatIndex);
+      } else if (data.t === 'seat-state' && peer.id === seatAuthorityId()) {
+        applySeatAssignments(data.assignments);
+      } else if (data.t === 'seat-result' && data.message) {
+        notify(String(data.message), data.ok ? 'success' : 'error');
       }
     } catch (_) {}
   };
@@ -2822,6 +2996,48 @@ function unlockAudio() {
   $$('audio').forEach(audio => audio.play().catch(() => {}));
 }
 
+function seatIndexAtPointer(event) {
+  if (!state.joined || !world.seats.length) return -1;
+  const rect = ui.canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return -1;
+  seatPointer.set(
+    (event.clientX - rect.left) / rect.width * 2 - 1,
+    -(event.clientY - rect.top) / rect.height * 2 + 1
+  );
+  seatRaycaster.setFromCamera(seatPointer, camera);
+  const hit = seatRaycaster.intersectObjects(world.seats.map(seat => seat.hitTarget), false)[0];
+  return Number.isInteger(hit?.object?.userData?.seatIndex) ? hit.object.userData.seatIndex : -1;
+}
+
+function updateSeatHover(event) {
+  if (event.pointerType === 'touch' || state.dragging) return;
+  state.hoveredSeatIndex = seatIndexAtPointer(event);
+  ui.canvas.style.cursor = state.hoveredSeatIndex >= 0 ? 'pointer' : '';
+  updateSeatVisuals();
+}
+
+function handleSeatPointer(event) {
+  const seatIndex = seatIndexAtPointer(event);
+  if (seatIndex < 0) return false;
+  const currentSeatIndex = state.seatAssignments.get(state.clientId) ?? world.local?.seatIndex ?? -1;
+  if (currentSeatIndex === seatIndex) {
+    if (world.local?.seatLocked) notify('Dein Sitzplatz ist vom Host gesperrt.');
+    else requestSeatChoice(-1);
+    return true;
+  }
+  const occupiedBy = seatOccupant(seatIndex);
+  if (occupiedBy && occupiedBy !== state.clientId) {
+    notify('Dieser Sitzplatz ist bereits besetzt.');
+    return true;
+  }
+  if (state.roomLocked && state.role === 'guest') {
+    notify('Die Guest-Sitzplätze sind vom Host gesperrt.');
+    return true;
+  }
+  requestSeatChoice(seatIndex);
+  return true;
+}
+
 function bindUi() {
   syncJoinViewport();
   setAvatarControls(loadAvatarProfile());
@@ -2945,12 +3161,19 @@ function bindUi() {
 
   ui.canvas.addEventListener('pointerdown', event => {
     state.dragging = true;
+    state.pointerStartX = event.clientX;
+    state.pointerStartY = event.clientY;
+    state.pointerMoved = false;
     state.dragX = event.clientX;
     state.dragY = event.clientY;
     ui.canvas.setPointerCapture?.(event.pointerId);
   });
   ui.canvas.addEventListener('pointermove', event => {
-    if (!state.dragging) return;
+    if (!state.dragging) {
+      updateSeatHover(event);
+      return;
+    }
+    if (Math.hypot(event.clientX - state.pointerStartX, event.clientY - state.pointerStartY) > 8) state.pointerMoved = true;
     const dx = event.clientX - state.dragX;
     const dy = event.clientY - state.dragY;
     if (!state.moving) state.cameraYaw -= dx * .006;
@@ -2958,9 +3181,19 @@ function bindUi() {
     state.dragX = event.clientX;
     state.dragY = event.clientY;
   });
-  const endDrag = () => { state.dragging = false; };
-  ui.canvas.addEventListener('pointerup', endDrag);
-  ui.canvas.addEventListener('pointercancel', endDrag);
+  ui.canvas.addEventListener('pointerup', event => {
+    const wasTap = !state.pointerMoved;
+    state.dragging = false;
+    if (wasTap) handleSeatPointer(event);
+    updateSeatHover(event);
+  });
+  ui.canvas.addEventListener('pointercancel', () => { state.dragging = false; });
+  ui.canvas.addEventListener('pointerleave', () => {
+    if (state.dragging) return;
+    state.hoveredSeatIndex = -1;
+    ui.canvas.style.cursor = '';
+    updateSeatVisuals();
+  });
   ui.canvas.addEventListener('wheel', event => {
     state.cameraDistance = THREE.MathUtils.clamp(state.cameraDistance + event.deltaY * .008, 5.5, 15);
   }, { passive: true });
@@ -2986,6 +3219,22 @@ function bindUi() {
   const stopMobileJump = event => event.currentTarget.classList.remove('pressed');
   $('#mobile-move [data-action="jump"]').addEventListener('pointerup', stopMobileJump);
   $('#mobile-move [data-action="jump"]').addEventListener('pointercancel', stopMobileJump);
+}
+
+function diagnosticSeatScreenPositions() {
+  const rect = ui.canvas.getBoundingClientRect();
+  return world.seats.map((seat, index) => {
+    const projected = new THREE.Vector3(seat.x, seat.y, seat.z).project(camera);
+    const x = rect.left + (projected.x + 1) * .5 * rect.width;
+    const y = rect.top + (1 - projected.y) * .5 * rect.height;
+    return {
+      index,
+      x,
+      y,
+      visible: projected.z > -1 && projected.z < 1 && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom,
+      occupiedBy: seatOccupant(index) || ''
+    };
+  });
 }
 
 Object.defineProperty(window, '__mrDiag', {
@@ -3046,6 +3295,9 @@ Object.defineProperty(window, '__mrDiag', {
       roomLocked: state.roomLocked,
       seatCapacity: world.seats.length,
       seatAssignments: state.seatAssignments.size,
+      seatAssignmentsDetail: [...state.seatAssignments.entries()].map(([clientId, seatIndex]) => ({ clientId, seatIndex })),
+      seatAuthorityId: seatAuthorityId(),
+      seatScreenPositions: diagnosticSeatScreenPositions(),
       seatFacings: world.seats.map((seat, index) => ({
         index,
         rotation: seat.rotation,

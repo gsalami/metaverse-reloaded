@@ -19,6 +19,7 @@
 - weiche Third-Person-Kamera, die sich beim Laufen automatisch hinter dem Avatar ausrichtet
 - synchronisierte Reaktionen wie Clap, Hearts, Celebrate, Wave und Laugh
 - Host-Raumkontrolle: `Seat all` setzt und sperrt nur Guests; Host und Cohosts bleiben beweglich
+- freie Sitzplatzwahl per Klick oder Touch; belegte Plätze werden raumweit synchronisiert und der Avatar schaut automatisch zur Leinwand
 - eindeutige Räume mit getrennten Guest- und Cohost-Invite-Codes
 - automatische Rollen: Creator wird Host, Guest-Code wird Guest, Cohost-Code wird Cohost
 - Cohosts können Voice, Screenshare, Seat all, Lock und Unlock bedienen
@@ -45,8 +46,9 @@
 6. Über `Reaktionen` Clap, Hearts und weitere Emotes auslösen.
 7. Die Kamera mit Mausziehen oder einer Wischgeste drehen.
 8. Host und Cohosts können Mikrofon und Screenshare über die untere Steuerleiste aktivieren.
-9. `Seat all` verteilt alle Guests auf Sitzplätze mit Blick zur Main Stage und sperrt sie sofort. Host und Cohosts bleiben beweglich; nach `Unlock Guests` können Guests wieder aufstehen.
-10. Nur der Haupt-Host sieht die getrennten Guest- und Cohost-Codes in der Invite-Konsole.
+9. Einen freien Sitzplatz anklicken oder antippen, um sich zu setzen. Erneut klicken oder loslaufen, um bei entsperrtem Raum wieder aufzustehen.
+10. `Seat all` verteilt alle Guests auf Sitzplätze mit Blick zur Main Stage und sperrt sie sofort. Host und Cohosts bleiben beweglich; nach `Unlock Guests` können Guests wieder aufstehen.
+11. Nur der Haupt-Host sieht die getrennten Guest- und Cohost-Codes in der Invite-Konsole.
 
 Screensharing hängt von der Browserunterstützung ab. Desktop-Chrome und Desktop-Safari sind dafür die empfohlenen Oberflächen. Mobile Teilnehmende können die Welt, Host-Audio, Screenshare und Chat nutzen; mobile Browser ohne `getDisplayMedia` können selbst keinen Bildschirm senden.
 
@@ -93,6 +95,7 @@ python3 -m http.server 8899
 - `npm run test:room-creation`: einzigartige Namensvorschläge, sichtbare Titel und unterschiedliche Deep Links
 - `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
 - `npm run test:camera-follow`: automatische Kameraausrichtung bei WASD und freies Drehen im Stand
+- `npm run test:seat-selection`: Maus-Klick, Mobile-Tap, Belegungssynchronisation, Sitzrichtung und Aufstehen
 - `node tests/ten-person-smoke.mjs`: WebRTC-Mesh-Regression mit zehn Personen
 - `node tests/capacity-smoke.mjs`: 25 Personen, Guest-only Seat all mit Auto-Lock und Ablehnung der 26. Person
 - `node tests/mobile-live-smoke.mjs`: echter mobiler Live-Beitritt, Touch-Bewegung und Chat

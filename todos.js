@@ -20,7 +20,8 @@ const INITIAL_TASKS = [
   ['camera-auto-follow', 'Kamera beim Laufen automatisch hinter dem Avatar', 'Erledigt', 'Hoch', 'Bei WASD und mobiler Bewegung folgt die Third-Person-Kamera weich der Blickrichtung; freies Kameradrehen bleibt im Stand möglich.'],
   ['unique-room-name-mobile-create', 'Unique Raumnamen und mobile Erstellung', 'Erledigt', 'Hoch', 'Jede neue Seite schlägt einen einzigartigen sichtbaren Raumnamen vor; der mobile Create-Button bleibt auch über der iPhone-Tastatur sichtbar und anklickbar.'],
   ['distinct-room-architectures', 'Unterschiedliche Raumgrössen und Architekturen', 'Erledigt', 'Hoch', 'Zehn eigene Architekturen mit neun Raumabmessungen: unter anderem Alpine Lodge mit Kamin, Cyber Gallery, Zen Courtyard, Dome, Habitat und Festivalfläche; Mobile lädt reduzierte Architekturdetails.'],
-  ['accounts-metaverses', 'Sichere Accounts und eigene Metaverses', 'Geplant', 'Hoch', 'Account-System mit Besitz, Mitgliedschaften, Rollen und Verwaltung eigener Metaverses serverseitig absichern.']
+  ['click-to-sit', 'Sitzplatz per Klick oder Tap auswählen', 'Erledigt', 'Hoch', 'Freie Sitze sind auf Desktop und Mobile direkt auswählbar; Belegung, Screen-Ausrichtung, Aufstehen, Lock und Multiuser-Synchronisation sind getestet.'],
+  ['accounts-metaverses', 'Magic-Link-Accounts und eigene Metaverses', 'Blockiert', 'Hoch', 'Für sichere Besitz-, Bearbeitungs- und Löschrechte braucht die öffentliche App ein Auth-Backend mit Row-Level Security; benötigt werden Supabase-Projekt-URL und Public/Anon-Key.']
 ];
 
 const elements = {
