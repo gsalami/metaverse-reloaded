@@ -27,6 +27,8 @@ const POLL_SIGNALS_MS = 750;
 const POLL_CHAT_MS = 1_500;
 const POLL_PORTALS_MS = 4_000;
 const AVATAR_STORAGE_KEY = 'mr-avatar-profile';
+const LAST_SPACES_KEY = 'metaverse-reloaded:last-spaces';
+const MAX_RECENT_SPACES = 8;
 const HAIR_STYLES = new Set(['none', 'short', 'bob', 'mohawk']);
 const OUTFIT_STYLES = new Set(['rogue', 'explorer', 'cyber']);
 const DEFAULT_AVATAR_PROFILE = Object.freeze({
@@ -54,7 +56,8 @@ const state = {
   roomTitle: '',
   roomOwner: false,
   inviteCodes: null,
-  entryMode: new URLSearchParams(location.search).has('invite') ? 'join' : 'create',
+  entryMode: new URLSearchParams(location.search).has('room') ? 'public' : new URLSearchParams(location.search).has('invite') ? 'join' : 'create',
+  publicAccess: null,
   name: '',
   role: 'guest',
   color: '',
@@ -99,6 +102,9 @@ const ui = {
   hairColor: $('#avatar-hair-color'),
   createPanel: $('#create-panel'),
   joinPanel: $('#join-panel'),
+  publicRoomPanel: $('#public-room-panel'),
+  publicRoomTitle: $('#public-room-title'),
+  entryTabs: $('.entry-tabs'),
   createMode: $('#create-mode-button'),
   joinMode: $('#join-mode-button'),
   enterLabel: $('.enter-button span'),
@@ -136,6 +142,8 @@ const ui = {
   portalList: $('#portal-list'),
   portalPrompt: $('#portal-prompt'),
   portalPromptLabel: $('#portal-prompt-label'),
+  roomArrival: $('#room-arrival'),
+  roomArrivalTitle: $('#room-arrival-title'),
   unread: $('#unread-badge'),
   mediaStage: $('#media-stage'),
   stageVideo: $('#stage-video'),
@@ -221,6 +229,37 @@ async function resolveInviteCode(value) {
   const room = rows[0];
   if (!room) throw new Error('Dieser Invite-Code ist ungültig oder nicht mehr aktiv.');
   return { roomId: room.room_id, title: room.title, role: field === 'cohost_code_hash' ? 'cohost' : 'guest', roomOwner: false, inviteCodes: null };
+}
+
+async function resolvePublicRoom(value) {
+  const roomId = String(value || '').trim();
+  if (!/^[a-z0-9_-]{3,64}$/i.test(roomId)) throw new Error('Dieser Space-Link ist ungültig.');
+  const rows = await dbGet('rooms', { room_id: roomId, status: 'active' }, 2);
+  const room = rows[0];
+  if (!room) throw new Error('Dieser öffentliche Space ist nicht mehr aktiv.');
+  return { roomId: room.room_id, title: room.title, role: 'guest', roomOwner: false, inviteCodes: null };
+}
+
+function rememberVisitedSpace(roomId, title) {
+  let stored = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LAST_SPACES_KEY) || '[]');
+    if (Array.isArray(parsed)) stored = parsed;
+  } catch (_) {}
+  const visited = {
+    roomId: String(roomId),
+    title: String(title || roomId).slice(0, 140),
+    visitedAt: new Date().toISOString()
+  };
+  const recent = [visited, ...stored.filter(item => String(item?.roomId ?? item?.room_id) !== visited.roomId)].slice(0, MAX_RECENT_SPACES);
+  localStorage.setItem(LAST_SPACES_KEY, JSON.stringify(recent));
+}
+
+function showRoomArrival(title) {
+  ui.roomArrivalTitle.textContent = `Du bist jetzt in „${title}“`;
+  ui.roomArrival.hidden = false;
+  clearTimeout(showRoomArrival.timeout);
+  showRoomArrival.timeout = setTimeout(() => { ui.roomArrival.hidden = true; }, 10_000);
 }
 
 function initials(name) {
@@ -789,7 +828,8 @@ async function resumePortalTravel() {
     return;
   }
   await enterRoom({ roomId: portal.target_room_id, title: portal.target_title, role: 'guest', roomOwner: false, inviteCodes: null, name });
-  notify(`Du bist durch „${portal.label}“ gereist.`, 'success');
+  showRoomArrival(portal.target_title);
+  notify(`Portal angekommen: Du bist jetzt in „${portal.target_title}“.`, 'success');
 }
 
 function buildSkyline() {
@@ -905,7 +945,7 @@ function addAccessory(group, geometry, material, position, scale = [1, 1, 1], ro
   return mesh;
 }
 
-function buildAvatarAccessories(profile) {
+function buildFallbackAvatarAccessories(profile) {
   const safe = normalizeAvatarProfile(profile);
   const group = new THREE.Group();
   group.name = 'AvatarCustomization';
@@ -940,6 +980,106 @@ function buildAvatarAccessories(profile) {
   return group;
 }
 
+function neutralizeSourceAvatar(model) {
+  model.traverse(object => {
+    if (!object.isMesh) return;
+    object.visible = false;
+    object.castShadow = false;
+    object.receiveShadow = false;
+    object.userData.neutralizedSourceMesh = true;
+  });
+}
+
+function sourceAvatarMeshStats(model) {
+  const stats = { total: 0, visible: 0 };
+  model?.traverse(object => {
+    if (!object.isMesh || !object.userData.neutralizedSourceMesh) return;
+    stats.total++;
+    if (object.visible) stats.visible++;
+  });
+  return stats;
+}
+
+function addRigPart(appearance, parent, geometry, material, position, scale = [1, 1, 1], rotation = [0, 0, 0], name = '') {
+  if (!parent) return null;
+  const part = addAccessory(parent, geometry, material, position, scale, rotation, name);
+  part.userData.avatarModule = true;
+  appearance.children.push(part);
+  return part;
+}
+
+function buildRiggedAvatarAppearance(model, profile) {
+  const safe = normalizeAvatarProfile(profile);
+  const appearance = { children: [], rigged: true };
+  const boneIndex = new Map();
+  model.traverse(object => {
+    if (object.isBone) boneIndex.set(object.name.toLowerCase().replace(/[^a-z0-9]/g, ''), object);
+  });
+  const bone = name => boneIndex.get(name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const skin = avatarMaterial('#c88768', { roughness: .78 });
+  const base = avatarMaterial('#222837', { roughness: .72 });
+  const cloth = avatarMaterial(safe.primaryColor, { roughness: .48 });
+  const hair = avatarMaterial(safe.hairColor, { roughness: .76 });
+  const accentColor = safe.outfitStyle === 'cyber' ? '#8cf6ff' : safe.outfitStyle === 'explorer' ? '#d4a15b' : '#d8ddea';
+  const accent = avatarMaterial(accentColor, {
+    metalness: safe.outfitStyle === 'cyber' ? .72 : .16,
+    emissive: safe.outfitStyle === 'cyber'
+  });
+
+  // The KayKit Rogue remains the animation skeleton only. These matte, neutral
+  // body parts contain no baked-in hair or clothing and follow the same bones.
+  addRigPart(appearance, bone('head'), new THREE.SphereGeometry(.245, 16, 12), skin, [0, .13, 0], [1, 1.08, .96], [0, 0, 0], 'BaseHead');
+  addRigPart(appearance, bone('chest'), new THREE.CapsuleGeometry(.25, .22, 5, 10), base, [0, .03, 0], [1.08, 1, .8], [0, 0, 0], 'BaseTorso');
+  addRigPart(appearance, bone('hips'), new THREE.BoxGeometry(.48, .3, .3), base, [0, .15, 0], [1, 1, 1], [0, 0, 0], 'BaseHips');
+  for (const side of ['l', 'r']) {
+    addRigPart(appearance, bone(`upperarm.${side}`), new THREE.CapsuleGeometry(.105, .14, 4, 8), skin, [0, .12, 0], [1, 1, 1], [0, 0, 0], `BaseUpperArm-${side}`);
+    addRigPart(appearance, bone(`lowerarm.${side}`), new THREE.CapsuleGeometry(.09, .13, 4, 8), skin, [0, .12, 0], [1, 1, 1], [0, 0, 0], `BaseLowerArm-${side}`);
+    addRigPart(appearance, bone(`hand.${side}`), new THREE.SphereGeometry(.105, 10, 8), skin, [0, .075, 0], [1, 1.15, .9], [0, 0, 0], `BaseHand-${side}`);
+    addRigPart(appearance, bone(`upperleg.${side}`), new THREE.CapsuleGeometry(.135, .15, 4, 8), base, [0, .14, 0], [1, 1, .92], [0, 0, 0], `BaseUpperLeg-${side}`);
+    addRigPart(appearance, bone(`lowerleg.${side}`), new THREE.CapsuleGeometry(.115, .14, 4, 8), base, [0, .13, 0], [1, 1, .9], [0, 0, 0], `BaseLowerLeg-${side}`);
+    addRigPart(appearance, bone(`foot.${side}`), new THREE.BoxGeometry(.21, .14, .34), base, [0, .07, .07], [1, 1, 1], [0, 0, 0], `BaseFoot-${side}`);
+  }
+
+  if (safe.hairStyle === 'short') {
+    addRigPart(appearance, bone('head'), new THREE.SphereGeometry(.263, 16, 9, 0, Math.PI * 2, 0, Math.PI * .48), hair, [0, .2, 0], [1, .72, 1], [0, 0, 0], 'HairShort');
+  } else if (safe.hairStyle === 'bob') {
+    addRigPart(appearance, bone('head'), new THREE.SphereGeometry(.275, 16, 12, 0, Math.PI * 2, 0, Math.PI * .75), hair, [0, .18, .01], [1.02, 1.08, 1.02], [0, 0, 0], 'HairBob');
+    addRigPart(appearance, bone('head'), new THREE.BoxGeometry(.08, .28, .12), hair, [-.235, .07, .01], [1, 1, 1], [0, 0, -.08], 'HairBobLeft');
+    addRigPart(appearance, bone('head'), new THREE.BoxGeometry(.08, .28, .12), hair, [.235, .07, .01], [1, 1, 1], [0, 0, .08], 'HairBobRight');
+  } else if (safe.hairStyle === 'mohawk') {
+    for (let index = 0; index < 5; index++) {
+      addRigPart(appearance, bone('head'), new THREE.ConeGeometry(.085, .26 + index * .012, 5), hair, [0, .37, -.16 + index * .08], [1, 1, .82], [0, 0, 0], `HairMohawk${index}`);
+    }
+  }
+
+  if (safe.outfitStyle === 'rogue') {
+    addRigPart(appearance, bone('chest'), new THREE.CapsuleGeometry(.275, .28, 5, 10), cloth, [0, .035, 0], [1.13, 1, .9], [0, 0, 0], 'OutfitCasualTop');
+    addRigPart(appearance, bone('hips'), new THREE.TorusGeometry(.255, .035, 6, 18), accent, [0, .22, 0], [1, 1, .78], [Math.PI / 2, 0, 0], 'OutfitCasualBelt');
+    for (const side of ['l', 'r']) addRigPart(appearance, bone(`foot.${side}`), new THREE.BoxGeometry(.235, .16, .37), cloth, [0, .07, .075], [1, 1, 1], [0, 0, 0], `OutfitCasualShoe-${side}`);
+  } else if (safe.outfitStyle === 'explorer') {
+    addRigPart(appearance, bone('chest'), new THREE.BoxGeometry(.57, .46, .36), cloth, [0, .01, 0], [1, 1, 1], [0, 0, 0], 'OutfitExplorerVest');
+    addRigPart(appearance, bone('chest'), new THREE.BoxGeometry(.48, .55, .18), accent, [0, .03, -.28], [1, 1, 1], [0, 0, 0], 'OutfitExplorerPack');
+    addRigPart(appearance, bone('hips'), new THREE.TorusGeometry(.27, .045, 6, 18), accent, [0, .22, 0], [1.05, 1, .8], [Math.PI / 2, 0, 0], 'OutfitExplorerBelt');
+  } else if (safe.outfitStyle === 'cyber') {
+    addRigPart(appearance, bone('chest'), new THREE.BoxGeometry(.58, .43, .38), cloth, [0, .02, 0], [1, 1, 1], [0, 0, 0], 'OutfitCyberCore');
+    addRigPart(appearance, bone('chest'), new THREE.BoxGeometry(.4, .28, .055), accent, [0, .035, .22], [1, 1, 1], [0, 0, 0], 'OutfitCyberChest');
+    for (const side of ['l', 'r']) {
+      addRigPart(appearance, bone(`upperarm.${side}`), new THREE.BoxGeometry(.22, .18, .27), cloth, [0, .04, 0], [1, 1, 1], [0, 0, 0], `OutfitCyberShoulder-${side}`);
+      addRigPart(appearance, bone(`lowerleg.${side}`), new THREE.BoxGeometry(.22, .26, .24), accent, [0, .11, -.02], [1, 1, 1], [0, 0, 0], `OutfitCyberShin-${side}`);
+    }
+  }
+  return appearance;
+}
+
+function disposeAvatarAppearance(appearance) {
+  for (const object of appearance?.children || []) {
+    object.parent?.remove(object);
+    object.geometry?.dispose?.();
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach(material => material?.dispose?.());
+  }
+}
+
 function applyAvatarProfile(avatar, profile) {
   if (!avatar) return;
   const safe = normalizeAvatarProfile(profile);
@@ -949,10 +1089,16 @@ function applyAvatarProfile(avatar, profile) {
   avatar.profileSignature = signature;
   avatar.person.avatarProfile = safe;
   avatar.person.color = safe.primaryColor;
-  if (avatar.accessories) avatar.bodyVisual.remove(avatar.accessories);
-  avatar.accessories = buildAvatarAccessories(safe);
-  avatar.bodyVisual.add(avatar.accessories);
-  if (avatar.model) tintModel(avatar.model, safe.primaryColor);
+  if (avatar.accessories) {
+    if (avatar.accessories.isGroup) avatar.bodyVisual.remove(avatar.accessories);
+    else disposeAvatarAppearance(avatar.accessories);
+  }
+  if (avatar.model) {
+    avatar.accessories = buildRiggedAvatarAppearance(avatar.model, safe);
+  } else {
+    avatar.accessories = buildFallbackAvatarAccessories(safe);
+    avatar.bodyVisual.add(avatar.accessories);
+  }
   if (avatar.aura?.material?.color) avatar.aura.material.color.set(safe.primaryColor);
 }
 
@@ -1042,34 +1188,17 @@ function createAvatar(person, local = false) {
     const scale = size.y > .05 ? 2 / size.y : 1.2;
     model.scale.setScalar(scale);
     model.position.set(-(box.min.x + box.max.x) * .5 * scale, -box.min.y * scale, -(box.min.z + box.max.z) * .5 * scale);
-    tintModel(model, avatar.profile.primaryColor);
+    neutralizeSourceAvatar(model);
     bodyVisual.add(model);
     bodyVisual.remove(placeholder);
     avatar.model = model;
+    if (avatar.accessories?.isGroup) bodyVisual.remove(avatar.accessories);
+    else disposeAvatarAppearance(avatar.accessories);
+    avatar.accessories = buildRiggedAvatarAppearance(model, avatar.profile);
     avatar.mixer = new THREE.AnimationMixer(model);
     setupActions(avatar);
   });
   return avatar;
-}
-
-function tintModel(model, colorValue) {
-  const tint = new THREE.Color(colorValue);
-  model.traverse(object => {
-    if (!object.isMesh) return;
-    object.castShadow = !MOBILE;
-    object.frustumCulled = false;
-    if (/head/i.test(object.name || '')) return;
-    if (!object.userData.avatarMaterialCloned) {
-      object.material = object.material.clone();
-      object.userData.avatarMaterialCloned = true;
-      if (object.material.color) object.userData.avatarBaseColor = object.material.color.clone();
-    }
-    if (object.material.color) object.material.color.copy(object.userData.avatarBaseColor || new THREE.Color('#ffffff')).lerp(tint, .38);
-    if (object.material.emissive) {
-      object.material.emissive.copy(tint);
-      object.material.emissiveIntensity = .025;
-    }
-  });
 }
 
 function skinnedBounds(model) {
@@ -1145,10 +1274,11 @@ function setSeatState(avatar, seatIndex, locked) {
   if (!avatar.emote) setAvatarAction(avatar, 'sit');
 }
 
-function releaseSeat(avatar) {
-  if (!avatar || avatar.seatLocked) return false;
+function releaseSeat(avatar, force = false) {
+  if (!avatar || (avatar.seatLocked && !force)) return false;
   state.seatAssignments.delete(avatar.person?.client_id);
   avatar.seated = false;
+  avatar.seatLocked = false;
   avatar.seatIndex = -1;
   avatar.root.position.y = 0;
   avatar.root.userData.target.y = 0;
@@ -1161,7 +1291,13 @@ function roomControlPayload() {
   return {
     t: 'room-control',
     locked: state.roomLocked,
-    assignments: [...state.seatAssignments.entries()].map(([clientId, seatIndex]) => ({ clientId, seatIndex }))
+    assignments: [...state.seatAssignments.entries()].map(([clientId, seatIndex]) => ({
+      clientId,
+      seatIndex,
+      role: clientId === state.clientId
+        ? state.role
+        : state.people.get(clientId)?.role || world.avatars.get(clientId)?.person?.role || ''
+    }))
   };
 }
 
@@ -1177,22 +1313,27 @@ function applyRoomControl(payload) {
   state.seatAssignments.clear();
   for (const assignment of payload.assignments || []) {
     const seatIndex = Number(assignment.seatIndex);
-    if (!world.seats[seatIndex]) continue;
+    const knownRole = assignment.clientId === state.clientId
+      ? state.role
+      : state.people.get(assignment.clientId)?.role || world.avatars.get(assignment.clientId)?.person?.role;
+    const role = knownRole || assignment.role;
+    if (role !== 'guest' || !world.seats[seatIndex]) continue;
     state.seatAssignments.set(assignment.clientId, seatIndex);
   }
   for (const [clientId, seatIndex] of state.seatAssignments) {
     setSeatState(world.avatars.get(clientId), seatIndex, state.roomLocked);
   }
   for (const [clientId, avatar] of world.avatars) {
-    if (!state.seatAssignments.has(clientId) && avatar.seated && !state.roomLocked) releaseSeat(avatar);
+    if (!state.seatAssignments.has(clientId) && avatar.seated) releaseSeat(avatar, true);
   }
   updateRoomControlUi();
 }
 
-function participantIds() {
+function guestParticipantIds() {
   const people = new Map(state.people);
   if (world.local) people.set(state.clientId, { client_id: state.clientId, role: state.role, name: state.name });
   return [...people.values()]
+    .filter(person => person.role === 'guest')
     .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.name.localeCompare(b.name) || a.client_id.localeCompare(b.client_id))
     .map(person => person.client_id)
     .slice(0, world.seats.length);
@@ -1200,7 +1341,7 @@ function participantIds() {
 
 function assignSeatsToCurrentPeople() {
   state.seatAssignments.clear();
-  participantIds().forEach((clientId, seatIndex) => state.seatAssignments.set(clientId, seatIndex));
+  guestParticipantIds().forEach((clientId, seatIndex) => state.seatAssignments.set(clientId, seatIndex));
 }
 
 function publishRoomControl(message) {
@@ -1212,27 +1353,32 @@ function publishRoomControl(message) {
 function seatAllPeople() {
   if (!isHostRole()) return;
   assignSeatsToCurrentPeople();
-  publishRoomControl(`${state.seatAssignments.size} Personen wurden auf Sitzplätze verteilt.`);
+  state.roomLocked = true;
+  const count = state.seatAssignments.size;
+  publishRoomControl(count === 1 ? '1 Guest wurde gesetzt und gesperrt.' : `${count} Guests wurden gesetzt und gesperrt.`);
 }
 
 function lockAllSeats() {
   if (!isHostRole()) return;
   if (!state.seatAssignments.size) assignSeatsToCurrentPeople();
   state.roomLocked = true;
-  publishRoomControl('Sitzplätze gesperrt. Niemand kann aufstehen.');
+  publishRoomControl('Guest-Sitzplätze gesperrt. Hosts und Cohosts bleiben beweglich.');
 }
 
 function unlockAllSeats() {
   if (!isHostRole()) return;
   state.roomLocked = false;
-  publishRoomControl('Sitzplätze freigegeben. Alle können wieder aufstehen.');
+  publishRoomControl('Guest-Sitzplätze freigegeben. Guests können wieder aufstehen.');
 }
 
 function ensureSeatForPeer(peerId) {
-  if (!state.roomLocked || state.seatAssignments.has(peerId)) return;
+  const role = state.people.get(peerId)?.role || world.avatars.get(peerId)?.person?.role;
+  if (!state.roomLocked || role !== 'guest' || state.seatAssignments.has(peerId)) return false;
   const used = new Set(state.seatAssignments.values());
   const seatIndex = world.seats.findIndex((_, index) => !used.has(index));
-  if (seatIndex >= 0) state.seatAssignments.set(peerId, seatIndex);
+  if (seatIndex < 0) return false;
+  state.seatAssignments.set(peerId, seatIndex);
+  return true;
 }
 
 function hostRoleForPeer(peerId) {
@@ -1551,6 +1697,15 @@ async function pollPresence() {
       z: world.local?.root.position.z || 5,
       rotation: world.local?.root.rotation.y || 0
     });
+    if (isHostRole() && state.roomLocked) {
+      let seatingChanged = false;
+      for (const person of people) seatingChanged = ensureSeatForPeer(person.client_id) || seatingChanged;
+      if (seatingChanged) {
+        const payload = roomControlPayload();
+        applyRoomControl(payload);
+        broadcastData(payload);
+      }
+    }
     for (const [id] of world.avatars) if (id !== state.clientId && !state.people.has(id)) removeAvatar(id);
     for (const [id, peer] of state.peers) {
       if (!state.people.has(id) && Date.now() - peer.lastSeen > PRESENCE_TTL + 4_000) closePeer(id);
@@ -2023,7 +2178,9 @@ async function joinEvent(event) {
   try {
     const access = state.entryMode === 'create'
       ? await createUniqueRoom(form.get('room-name'))
-      : await resolveInviteCode(form.get('invite-code'));
+      : state.entryMode === 'public'
+        ? state.publicAccess || await resolvePublicRoom(new URLSearchParams(location.search).get('room'))
+        : await resolveInviteCode(form.get('invite-code'));
     await enterRoom({ ...access, name });
     if (access.roomOwner) setTimeout(showInviteConsole, 450);
   } catch (error) {
@@ -2046,6 +2203,7 @@ async function enterRoom({ roomId, title, role, roomOwner, inviteCodes, name }) 
   state.avatarProfile = normalizeAvatarProfile(state.avatarProfile);
   state.color = state.avatarProfile.primaryColor;
   localStorage.setItem('mr-display-name', name);
+  rememberVisitedSpace(roomId, title);
   const url = new URL(location.href);
   url.search = '';
   url.searchParams.set('room', roomId);
@@ -2149,19 +2307,41 @@ function updateMentionSuggestions() {
 }
 
 function setEntryMode(mode) {
-  state.entryMode = mode === 'join' ? 'join' : 'create';
+  state.entryMode = mode === 'public' ? 'public' : mode === 'join' ? 'join' : 'create';
   const joining = state.entryMode === 'join';
-  ui.createPanel.hidden = joining;
+  const publicEntry = state.entryMode === 'public';
+  ui.entryTabs.hidden = publicEntry;
+  ui.createPanel.hidden = joining || publicEntry;
   ui.joinPanel.hidden = !joining;
-  ui.createMode.classList.toggle('active', !joining);
+  ui.publicRoomPanel.hidden = !publicEntry;
+  ui.createMode.classList.toggle('active', !joining && !publicEntry);
   ui.joinMode.classList.toggle('active', joining);
-  ui.createMode.setAttribute('aria-selected', String(!joining));
+  ui.createMode.setAttribute('aria-selected', String(!joining && !publicEntry));
   ui.joinMode.setAttribute('aria-selected', String(joining));
-  ui.roomName.required = !joining;
+  ui.roomName.required = !joining && !publicEntry;
   ui.inviteCode.required = joining;
-  ui.enterLabel.textContent = joining ? 'Mit Invite-Code beitreten' : 'Eigenen Raum erstellen';
+  ui.enterLabel.textContent = publicEntry ? 'Space als Guest betreten' : joining ? 'Mit Invite-Code beitreten' : 'Eigenen Raum erstellen';
   ui.joinError.textContent = '';
-  setTimeout(() => (joining ? ui.inviteCode : ui.roomName).focus(), 0);
+  setTimeout(() => (publicEntry ? ui.name : joining ? ui.inviteCode : ui.roomName).focus(), 0);
+}
+
+async function preparePublicDeepLink() {
+  const roomId = new URLSearchParams(location.search).get('room');
+  if (!roomId || new URLSearchParams(location.search).has('portal')) return false;
+  setEntryMode('public');
+  ui.publicRoomTitle.textContent = 'Space wird geladen …';
+  try {
+    state.publicAccess = await resolvePublicRoom(roomId);
+    ui.publicRoomTitle.textContent = state.publicAccess.title;
+    ui.eventLabel.textContent = state.publicAccess.title.toUpperCase();
+    return true;
+  } catch (error) {
+    state.publicAccess = null;
+    ui.joinError.textContent = error.message || 'Dieser Space-Link konnte nicht geöffnet werden.';
+    ui.enterLabel.textContent = 'Space nicht verfügbar';
+    ui.joinForm.querySelector('button[type="submit"]').disabled = true;
+    return false;
+  }
 }
 
 function showInviteConsole() {
@@ -2252,6 +2432,7 @@ function bindUi() {
   ui.portalForm.addEventListener('submit', createPortal);
   ui.portalTargetCode.addEventListener('blur', () => { ui.portalTargetCode.value = normalizeInviteCode(ui.portalTargetCode.value); });
   ui.portalPrompt.addEventListener('click', travelThroughPortal);
+  $('#close-room-arrival').addEventListener('click', () => { ui.roomArrival.hidden = true; });
   $$('[data-close-dialog]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.closeDialog)?.close()));
   $('#close-hint').addEventListener('click', () => $('#world-hint').classList.add('hide'));
   $$('[data-close]').forEach(button => button.addEventListener('click', () => {
@@ -2370,8 +2551,11 @@ Object.defineProperty(window, '__mrDiag', {
       avatarStates: [...world.avatars.entries()].map(([clientId, avatar]) => ({
         clientId,
         local: avatar.local,
+        role: avatar.person?.role || '',
         profile: avatar.profile ? { ...avatar.profile } : null,
         accessories: avatar.accessories?.children.map(object => object.name) || [],
+        riggedAppearance: Boolean(avatar.accessories?.rigged),
+        sourceAvatarMeshes: sourceAvatarMeshStats(avatar.model),
         y: avatar.root.position.y,
         airborne: avatar.airborne,
         jumpCount: avatar.jumpCount,
@@ -2396,6 +2580,9 @@ bindUi();
 loadAvatarModel();
 animate();
 ui.join.showModal();
+preparePublicDeepLink().catch(error => {
+  ui.joinError.textContent = error.message || 'Dieser Space-Link konnte nicht geöffnet werden.';
+});
 resumePortalTravel().catch(error => {
   ui.joinError.textContent = error.message || 'Das Portal konnte nicht geöffnet werden.';
 });

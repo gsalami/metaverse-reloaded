@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Metaverse Reloaded · Öffentliche Spaces</title>
+  <link rel="stylesheet" href="spaces.css">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <a class="back-link" href="./">← Metaverse Reloaded</a>
+      <p class="eyebrow">DISCOVER</p>
+      <h1>Öffentliche Spaces</h1>
+      <p class="intro">Entdecke aktive Metaverses und steige über einen direkten Link ein.</p>
+    </div>
+
+    <div class="sync-state" id="sync-state" role="status" aria-live="polite">
+      <span class="sync-dot" aria-hidden="true"></span>
+      <span id="sync-label">Lade Spaces…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="space-section recent-section" aria-labelledby="recent-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">SCHNELL ZURÜCK</p>
+          <h2 id="recent-title">Zuletzt besuchte Spaces</h2>
+        </div>
+        <span class="space-count" id="recent-count">0</span>
+      </div>
+      <div class="space-grid" id="recent-spaces"></div>
+      <p class="empty-state" id="recent-empty">Du hast noch keine Spaces besucht.</p>
+    </section>
+
+    <section class="space-section" aria-labelledby="public-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">LIVE DIRECTORY</p>
+          <h2 id="public-title">Alle aktiven Metaverses</h2>
+        </div>
+        <span class="space-count" id="public-count">0</span>
+      </div>
+      <div class="space-grid" id="public-spaces" aria-live="polite" aria-busy="true"></div>
+      <p class="empty-state" id="public-state">Spaces werden geladen…</p>
+    </section>
+  </main>
+
+  <template id="space-card-template">
+    <article class="space-card">
+      <div class="card-topline">
+        <span class="live-badge"><span aria-hidden="true"></span> Aktiv</span>
+        <time></time>
+      </div>
+      <h3></h3>
+      <p class="room-id"></p>
+      <div class="card-actions">
+        <a class="join-link">Space betreten <span aria-hidden="true">↗</span></a>
+        <button class="copy-link" type="button">Link kopieren</button>
+      </div>
+      <p class="copy-status" role="status" aria-live="polite"></p>
+    </article>
+  </template>
+
+  <script src="spaces.js" defer></script>
+</body>
+</html>

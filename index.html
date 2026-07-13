@@ -34,6 +34,7 @@
         <span class="live-dot"></span>
         <span id="event-label">MAIN STAGE</span>
       </div>
+      <a class="spaces-directory-link" href="spaces.html" title="Öffentliche und zuletzt besuchte Spaces">Spaces</a>
       <div class="capacity" aria-live="polite">
         <span class="avatar-stack" id="avatar-stack"></span>
         <strong id="capacity-count">0 / 25</strong>
@@ -55,9 +56,9 @@
 
     <section class="host-room-controls glass" id="host-room-controls" aria-label="Host-Raumkontrolle" hidden>
       <span class="host-control-label"><i class="live-dot"></i> HOST CONTROL</span>
-      <button type="button" id="seat-all-button" title="Alle Personen auf Sitzplätze verteilen"><b>▦</b><span>Seat all</span></button>
-      <button type="button" id="lock-seats-button" title="Alle Personen auf ihren Sitzplätzen sperren"><b>🔒</b><span>Lock</span></button>
-      <button type="button" id="unlock-seats-button" title="Sitzplatzsperre aufheben" disabled><b>🔓</b><span>Unlock</span></button>
+      <button type="button" id="seat-all-button" title="Alle Guests setzen und sofort sperren; Host und Cohosts bleiben frei"><b>▦</b><span>Seat all</span></button>
+      <button type="button" id="lock-seats-button" title="Zugewiesene Guest-Sitzplätze erneut sperren"><b>🔒</b><span>Lock Guests</span></button>
+      <button type="button" id="unlock-seats-button" title="Guest-Sitzplätze freigeben" disabled><b>🔓</b><span>Unlock Guests</span></button>
       <button type="button" id="portals-button" title="Andere Spaces über Portale verbinden"><b>◉</b><span>Portals</span></button>
     </section>
 
@@ -102,6 +103,16 @@
     </section>
 
     <div class="notifications" id="notifications" aria-live="assertive"></div>
+
+    <section class="room-arrival glass" id="room-arrival" role="status" aria-live="assertive" hidden>
+      <span class="eyebrow">PORTAL ARRIVAL</span>
+      <strong id="room-arrival-title">Du bist jetzt in einem neuen Space</strong>
+      <p>Über deine zuletzt besuchten Spaces kannst du jederzeit zurück.</p>
+      <div>
+        <a href="spaces.html#recent-title">Letzte Spaces öffnen</a>
+        <button type="button" id="close-room-arrival" aria-label="Ankunftsmeldung schliessen">×</button>
+      </div>
+    </section>
 
     <button type="button" class="portal-prompt glass" id="portal-prompt" hidden>
       <span>PORTAL IN REICHWEITE</span>
@@ -183,6 +194,8 @@
         <fieldset class="avatar-customizer" id="avatar-customizer">
           <legend>Dein Avatar</legend>
           <div class="avatar-preview" id="avatar-preview" data-hair="short" data-outfit="rogue" aria-label="Avatar-Vorschau">
+            <small>MODULAR 3D</small>
+            <span class="preview-arm preview-arm-left"></span><span class="preview-arm preview-arm-right"></span>
             <span class="preview-hair"></span><span class="preview-head"></span><span class="preview-body"></span><span class="preview-outfit"></span>
           </div>
           <div class="avatar-options">
@@ -190,19 +203,20 @@
               <label for="avatar-primary-color">Outfitfarbe <input id="avatar-primary-color" type="color" value="#8c6cff"></label>
               <label for="avatar-hair-color">Haarfarbe <input id="avatar-hair-color" type="color" value="#30243b"></label>
             </div>
-            <span class="option-label">Haare</span>
+            <span class="option-label">Haarmodul</span>
             <div class="choice-row hair-choices">
               <label><input type="radio" name="hair-style" value="none"><span>Ohne</span></label>
               <label><input type="radio" name="hair-style" value="short" checked><span>Kurz</span></label>
               <label><input type="radio" name="hair-style" value="bob"><span>Bob</span></label>
               <label><input type="radio" name="hair-style" value="mohawk"><span>Mohawk</span></label>
             </div>
-            <span class="option-label">Kleidungsstil</span>
+            <span class="option-label">Outfitmodul</span>
             <div class="choice-row outfit-choices">
-              <label><input type="radio" name="outfit-style" value="rogue" checked><span>Rogue</span></label>
+              <label><input type="radio" name="outfit-style" value="rogue" checked><span>Casual</span></label>
               <label><input type="radio" name="outfit-style" value="explorer"><span>Explorer</span></label>
               <label><input type="radio" name="outfit-style" value="cyber"><span>Cyber</span></label>
             </div>
+            <p class="avatar-module-note">Neutraler Basis-Body mit animierten 3D-Modulen</p>
           </div>
         </fieldset>
 
@@ -223,9 +237,15 @@
           <p>Deine Rolle wird automatisch durch den Invite-Code bestimmt.</p>
         </section>
 
+        <section class="entry-panel public-room-panel" id="public-room-panel" data-entry-panel="public" hidden>
+          <span class="eyebrow">PUBLIC DEEP LINK</span>
+          <strong id="public-room-title">Space wird geladen …</strong>
+          <p>Du trittst über den öffentlichen Link automatisch als Guest bei. Host- und Cohost-Rechte sind weiterhin nur über ihre geschützten Codes möglich.</p>
+        </section>
+
         <p class="form-error" id="join-error" role="alert"></p>
         <button class="enter-button" type="submit"><span>Eigenen Raum erstellen</span><b>↗</b></button>
-        <small class="privacy-note">Ein Raum · maximal 25 Personen · invite only</small>
+        <small class="privacy-note">Ein Raum · maximal 25 Personen · <a href="spaces.html">öffentliche Spaces entdecken</a></small>
       </form>
     </dialog>
 
@@ -277,7 +297,7 @@
           <div><strong>SPACE × 2</strong><span>Springen und Double-Jump mit Salto</span></div>
           <div><strong>Maus</strong><span>Ziehen, um die Kamera zu drehen</span></div>
           <div><strong>☺</strong><span>Clap, Hearts und weitere Reaktionen</span></div>
-          <div><strong>HOST CONTROL</strong><span>Seat all sowie Sitzplätze sperren und freigeben</span></div>
+          <div><strong>HOST CONTROL</strong><span>Guests setzen und sperren; Host und Cohosts bleiben frei</span></div>
           <div><strong>@Name</strong><span>Personen im Chat erwähnen</span></div>
           <div><strong>Host</strong><span>Mikrofon und Bildschirm an alle senden</span></div>
         </div>

@@ -3,10 +3,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
-const [html, css, app, avatar] = await Promise.all([
+const [html, css, app, spacesHtml, spacesJs, avatar] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('styles.css', root), 'utf8'),
   readFile(new URL('app.js', root), 'utf8'),
+  readFile(new URL('spaces.html', root), 'utf8'),
+  readFile(new URL('spaces.js', root), 'utf8'),
   readFile(new URL('public/assets/avatars/kaykit-rogue.glb', root))
 ]);
 
@@ -33,12 +35,26 @@ assert.match(app, /DOUBLE_JUMP_VELOCITY/);
 assert.match(app, /triggerEmote/);
 assert.match(app, /seatAllPeople/);
 assert.match(app, /lockAllSeats/);
+assert.match(app, /function guestParticipantIds\(\)[\s\S]*?\.filter\(person => person\.role === 'guest'\)/);
+assert.match(app, /function seatAllPeople\(\)[\s\S]*?state\.roomLocked = true/);
+assert.match(app, /function ensureSeatForPeer\(peerId\)[\s\S]*?role !== 'guest'/);
 assert.match(app, /MAIN_STAGE_SCREEN_POSITION/);
 assert.match(app, /Empty rooms deliberately contain no decorative\/static portal rings/);
 assert.match(app, /public\/assets\/avatars\/kaykit-rogue\.glb/);
 assert.match(app, /\/_db\/profiles\/avatars/);
-assert.match(app, /function buildAvatarAccessories/);
+assert.match(app, /function neutralizeSourceAvatar/);
+assert.match(app, /function buildRiggedAvatarAppearance/);
+assert.match(app, /object\.visible = false/);
+assert.match(app, /part\.userData\.avatarModule = true/);
 assert.match(app, /localStorage\.setItem\(AVATAR_STORAGE_KEY/);
+assert.match(app, /function resolvePublicRoom/);
+assert.match(app, /metaverse-reloaded:last-spaces/);
+assert.match(app, /showRoomArrival\(portal\.target_title\)/);
+assert.match(html, /id=["']public-room-panel["']/);
+assert.match(html, /href=["']spaces\.html["']/);
+assert.match(spacesHtml, /id=["']public-spaces["']/);
+assert.match(spacesHtml, /id=["']recent-spaces["']/);
+assert.match(spacesJs, /url\.searchParams\.set\('room', roomId\)/);
 assert.match(css, /@media \(max-width: 760px\)/);
 assert.match(css, /\.mobile-move/);
 assert.ok((await stat(new URL('favicon.svg', root))).size > 100);

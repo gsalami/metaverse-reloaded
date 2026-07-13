@@ -41,7 +41,7 @@ async function exercise(browser, options) {
   await page.fill('#room-name', `Test ${options.name} Space`);
   const avatarChoice = options.mobile
     ? { primaryColor: '#19b88a', hairStyle: 'bob', hairColor: '#d36b27', outfitStyle: 'explorer' }
-    : { primaryColor: '#d246a6', hairStyle: 'mohawk', hairColor: '#1a9ee8', outfitStyle: 'cyber' };
+    : { primaryColor: '#d246a6', hairStyle: 'none', hairColor: '#1a9ee8', outfitStyle: 'cyber' };
   await page.locator('#avatar-primary-color').fill(avatarChoice.primaryColor);
   await page.locator('#avatar-hair-color').fill(avatarChoice.hairColor);
   await page.check(`[name="hair-style"][value="${avatarChoice.hairStyle}"]`, { force: true });
@@ -57,7 +57,14 @@ async function exercise(browser, options) {
   assert.equal(await page.evaluate(() => window.__mrDiag.roomOwner), true);
   assert.deepEqual(await page.evaluate(() => window.__mrDiag.avatarProfile), avatarChoice);
   assert.deepEqual(await page.evaluate(() => window.__mrDiag.avatarStates.find(avatar => avatar.local)?.profile), avatarChoice);
-  assert.ok((await page.evaluate(() => window.__mrDiag.avatarStates.find(avatar => avatar.local)?.accessories.length)) >= 3);
+  await page.waitForFunction(() => window.__mrDiag.avatarStates.find(avatar => avatar.local)?.riggedAppearance === true);
+  const avatarState = await page.evaluate(() => window.__mrDiag.avatarStates.find(avatar => avatar.local));
+  assert.ok(avatarState.accessories.length >= 18, JSON.stringify(avatarState));
+  assert.equal(avatarState.sourceAvatarMeshes.total, 6);
+  assert.equal(avatarState.sourceAvatarMeshes.visible, 0);
+  assert.ok(avatarState.accessories.some(name => name.startsWith('Base')));
+  assert.equal(avatarState.accessories.some(name => name.startsWith('Hair')), avatarChoice.hairStyle !== 'none');
+  assert.ok(avatarState.accessories.some(name => name.startsWith('Outfit')));
   assert.deepEqual(JSON.parse(await page.evaluate(() => window.localStorage.getItem('mr-avatar-profile'))), avatarChoice);
   await page.locator('#invite-dialog .close-dialog').click();
   await page.waitForSelector('#capacity-count:text-is("1 / 25")');
@@ -90,6 +97,17 @@ async function exercise(browser, options) {
     await page.waitForFunction(() => window.__mrDiag.activeEmote === 'hearts' && window.__mrDiag.emojiEffects >= 1);
   }
   await page.screenshot({ path: fileURLToPath(new URL(`room-${options.name}.png`, output)), fullPage: true });
+  const publicRoom = await page.evaluate(() => ({ eventId: window.__mrDiag.eventId, title: window.__mrDiag.roomTitle }));
+  await page.goto(`${base}?room=${encodeURIComponent(publicRoom.eventId)}`, { waitUntil: 'networkidle', timeout: 30_000 });
+  await page.waitForFunction(title => document.querySelector('#public-room-title')?.textContent === title, publicRoom.title);
+  assert.equal(await page.locator('#public-room-panel').isVisible(), true);
+  assert.equal(await page.locator('.entry-tabs').isVisible(), false);
+  assert.equal(await page.locator('#join-form .enter-button span').textContent(), 'Space als Guest betreten');
+  await page.click('#join-form .enter-button');
+  await page.waitForFunction(eventId => window.__mrDiag?.joined === true && window.__mrDiag.eventId === eventId, publicRoom.eventId);
+  assert.equal(await page.evaluate(() => window.__mrDiag.role), 'guest');
+  const recent = await page.evaluate(() => JSON.parse(localStorage.getItem('metaverse-reloaded:last-spaces') || '[]'));
+  assert.equal(recent[0]?.roomId, publicRoom.eventId);
   assert.deepEqual(errors, []);
   await context.close();
 }

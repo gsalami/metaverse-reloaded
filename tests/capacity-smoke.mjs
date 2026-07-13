@@ -53,7 +53,7 @@ try {
   assert.equal(await host.evaluate(() => window.__mrDiag.portals), 0, 'Empty rooms must not render decorative portal rings');
   await host.locator('#invite-dialog .close-dialog').click();
 
-  const now = new Date().toISOString();
+  const now = new Date(Date.now() + 120_000).toISOString();
   for (let index = 1; index <= 24; index++) {
     tables.presence.push({
       _id: nextId++,
@@ -75,17 +75,31 @@ try {
   assert.equal(await host.evaluate(() => window.__mrDiag.seatCapacity), 25);
 
   await host.click('#seat-all-button');
-  await host.waitForFunction(() => window.__mrDiag.seatAssignments === 25);
-  await host.click('#lock-seats-button');
-  await host.waitForFunction(() => window.__mrDiag.roomLocked && window.__mrDiag.avatarStates.length === 25 && window.__mrDiag.avatarStates.every(avatar => avatar.seated && avatar.seatLocked));
+  await host.waitForFunction(() => {
+    const diag = window.__mrDiag;
+    const guests = diag.avatarStates.filter(avatar => avatar.role === 'guest');
+    const hosts = diag.avatarStates.filter(avatar => avatar.role === 'host' || avatar.role === 'cohost');
+    return diag.roomLocked && diag.seatAssignments === 24 && guests.length === 24
+      && guests.every(avatar => avatar.seated && avatar.seatLocked)
+      && hosts.length === 1 && hosts.every(avatar => !avatar.seated && !avatar.seatLocked);
+  });
   const seating = await host.evaluate(() => ({
     seatFacings: window.__mrDiag.seatFacings,
     avatars: window.__mrDiag.avatarStates
   }));
   assert.equal(seating.seatFacings.length, 25);
   assert.ok(seating.seatFacings.every(seat => seat.alignment > .999999), 'Every seat rotation must point to the main-stage screen');
-  assert.ok(seating.avatars.every(avatar => avatar.stageFacingAlignment > .999999), 'Every seated avatar must face the main-stage screen');
+  assert.ok(seating.avatars.filter(avatar => avatar.role === 'guest').every(avatar => avatar.stageFacingAlignment > .999999), 'Every seated Guest must face the main-stage screen');
 
+  const overflowCheckTime = new Date(Date.now() + 60_000).toISOString();
+  for (const row of tables.presence) {
+    if (row.client_id.startsWith('!capacity-guest-')) row.created_at = overflowCheckTime;
+  }
+  await hostSession.context.close();
+  tables.presence.push({
+    _id: nextId++, event_id: eventId, client_id: '!capacity-host-holder', name: 'Capacity Holder', role: 'host',
+    color: '#8c6cff', x: 0, z: 5, rotation: 0, status: 'online', created_at: overflowCheckTime
+  });
   const overflowSession = await newPage(browser);
   sessions.push(overflowSession);
   const overflow = overflowSession.page;
@@ -94,10 +108,11 @@ try {
   await overflow.fill('#display-name', 'Person 26');
   await overflow.fill('#invite-code', inviteCodes.guest);
   await overflow.click('.enter-button');
-  await overflow.waitForFunction(() => document.querySelector('#join-error')?.textContent.includes('Maximal 25 Personen'));
+  await overflow.waitForFunction(() => document.querySelector('#join-error')?.textContent.trim().length > 0);
+  assert.match(await overflow.locator('#join-error').textContent(), /Maximal 25 Personen/);
   assert.equal(await overflow.evaluate(() => window.__mrDiag.joined), false);
   assert.deepEqual(errors, []);
-  console.log('capacity-smoke: ok', JSON.stringify({ people: 25, seats: 25, facingScreen: 25, locked: 25, decorativePortals: 0, overflowRejected: true }));
+  console.log('capacity-smoke: ok', JSON.stringify({ people: 25, guestSeats: 24, facingScreen: 24, lockedGuests: 24, freeHosts: 1, decorativePortals: 0, overflowRejected: true }));
 } finally {
   await Promise.all(sessions.map(({ context }) => context.close().catch(() => {})));
   await browser.close();

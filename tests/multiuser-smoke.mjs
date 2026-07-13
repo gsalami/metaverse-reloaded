@@ -61,6 +61,7 @@ async function selectAvatar(page, profile) {
 
 async function createRoom(page, name, profile) {
   await page.goto(base, { waitUntil: 'networkidle', timeout: 30_000 });
+  await page.waitForSelector('#join-dialog[open]');
   await page.fill('#display-name', name);
   await page.fill('#room-name', room);
   await selectAvatar(page, profile);
@@ -73,6 +74,7 @@ async function createRoom(page, name, profile) {
 
 async function joinWithCode(page, name, code, profile) {
   await page.goto(`${base}?invite=${encodeURIComponent(code)}`, { waitUntil: 'networkidle', timeout: 30_000 });
+  await page.waitForSelector('#join-dialog[open]');
   await page.fill('#display-name', name);
   await selectAvatar(page, profile);
   await page.click('.enter-button');
@@ -80,10 +82,8 @@ async function joinWithCode(page, name, code, profile) {
 }
 
 async function pressSpace(page) {
-  await page.evaluate(() => {
-    document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true }));
-    document.body.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', key: ' ', bubbles: true }));
-  });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Space');
 }
 
 const browser = await chromium.launch({
@@ -164,11 +164,21 @@ try {
   await visitor.waitForFunction(() => !window.__mrDiag.airborne && window.__mrDiag.jumpCount === 0 && Math.abs(window.__mrDiag.flipRotation) < .001, null, { timeout: 3_000 });
 
   await cohost.click('#seat-all-button');
-  await host.waitForFunction(() => window.__mrDiag.seated && window.__mrDiag.seatAssignments === 3 && window.__mrDiag.avatarStates.every(avatar => avatar.seated));
-  await visitor.waitForFunction(() => window.__mrDiag.seated && window.__mrDiag.seatAssignments === 3);
-  await cohost.click('#lock-seats-button');
-  await host.waitForFunction(() => window.__mrDiag.roomLocked && window.__mrDiag.seatLocked);
-  await visitor.waitForFunction(() => window.__mrDiag.roomLocked && window.__mrDiag.seatLocked);
+  await Promise.all([host, visitor, cohost].map(page => page.waitForFunction(() => {
+    const diag = window.__mrDiag;
+    const guests = diag.avatarStates.filter(avatar => avatar.role === 'guest');
+    const controllers = diag.avatarStates.filter(avatar => avatar.role === 'host' || avatar.role === 'cohost');
+    return diag.roomLocked && diag.seatAssignments === 1 && guests.length === 1
+      && guests.every(avatar => avatar.seated && avatar.seatLocked)
+      && controllers.length === 2 && controllers.every(avatar => !avatar.seated && !avatar.seatLocked);
+  })));
+
+  const cohostPositionBefore = await cohost.evaluate(() => window.__mrDiag.localPosition);
+  await cohost.keyboard.down('KeyW');
+  await cohost.waitForTimeout(400);
+  await cohost.keyboard.up('KeyW');
+  const cohostPositionAfter = await cohost.evaluate(() => window.__mrDiag.localPosition);
+  assert.ok(Math.hypot(cohostPositionAfter[0] - cohostPositionBefore[0], cohostPositionAfter[2] - cohostPositionBefore[2]) > .2, 'Cohost must remain movable while Guests are locked');
 
   const lockedPosition = await visitor.evaluate(() => window.__mrDiag.localPosition);
   await visitor.keyboard.down('KeyW');
@@ -189,7 +199,7 @@ try {
   await host.screenshot({ path: fileURLToPath(new URL('multiuser-host.png', output)), fullPage: true });
   await visitor.screenshot({ path: fileURLToPath(new URL('multiuser-visitor.png', output)), fullPage: true });
   assert.deepEqual(errors, []);
-  console.log('multiuser-smoke: ok', JSON.stringify({ people: 3, roles: ['host', 'guest', 'cohost'], peerConnections: 6, hostAudio: true, hostScreen: true, mention: true, movement: true, leftRight: true, doubleJump: true, flip: true, emotes: true, cohostControls: true, seatAll: true, lock: true, unlock: true }));
+  console.log('multiuser-smoke: ok', JSON.stringify({ people: 3, roles: ['host', 'guest', 'cohost'], peerConnections: 6, hostAudio: true, hostScreen: true, mention: true, movement: true, leftRight: true, doubleJump: true, flip: true, emotes: true, cohostControls: true, guestOnlySeatAll: true, autoLock: true, controllersMovable: true, unlock: true }));
 
   await hostContext.close();
   await visitorContext.close();

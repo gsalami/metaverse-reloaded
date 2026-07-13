@@ -117,13 +117,19 @@ try {
   await guest.click('#portal-prompt');
   await guest.waitForFunction(targetId => window.__mrDiag?.joined === true && window.__mrDiag.eventId === targetId, targetRoom.eventId, { timeout: 30_000 });
   assert.equal(await guest.evaluate(() => window.__mrDiag.role), 'guest');
+  await guest.waitForSelector('#room-arrival:not([hidden])');
+  assert.match(await guest.locator('#room-arrival-title').textContent(), /Destination/);
+  assert.match(await guest.locator('#room-arrival a').getAttribute('href'), /spaces\.html#recent-title$/);
+  const recentSpaces = await guest.evaluate(() => JSON.parse(localStorage.getItem('metaverse-reloaded:last-spaces') || '[]'));
+  assert.equal(recentSpaces[0]?.roomId, targetRoom.eventId, 'destination is newest recent space');
+  assert.ok(recentSpaces.some(space => space.roomId === sourceRoom.eventId), 'source remains available for return without portal');
   await guest.click('#chat-button');
   await guest.waitForSelector('.message-text:text-is("NUR IM ZIELRAUM")');
   assert.equal(await guest.locator('.message-text:text-is("NUR IM QUELLRAUM")').count(), 0, 'Source chat must not leak into destination room');
   assert.match(await guest.locator('#chat-room-scope').innerText(), /DESTINATION/);
 
   assert.deepEqual(errors, []);
-  console.log('portal-smoke: ok', JSON.stringify({ roomScopedChat: true, portalCreated: true, threeDProximity: true, portalTravel: true, destinationRole: 'guest' }));
+  console.log('portal-smoke: ok', JSON.stringify({ roomScopedChat: true, portalCreated: true, threeDProximity: true, portalTravel: true, destinationRole: 'guest', arrivalFeedback: true, recentReturn: true }));
 
   await Promise.all([destinationContext.close(), sourceContext.close(), guestContext.close()]);
 } finally {
