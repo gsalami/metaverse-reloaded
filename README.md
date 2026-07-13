@@ -10,6 +10,7 @@
 
 - elegante futuristische 3D-Welt für Desktop und Mobile
 - iPhone-taugliche Raum-Erstellung mit tastaturabhängigem Dialog und ohne Safari-Fokuszoom
+- automatisch vorgeschlagene, kollisionsgeprüfte Raumnamen statt generischem „Mein Metaverse“
 - zehn auswählbare, mobile-fähige Raum-Templates von Alpine Summit bis Ocean Dome
 - KayKit-Rogue-Rig aus Kuble Office mit Idle-, Lauf-, Sitz- und Cheer-Animation
 - neutraler Basis-Body ohne sichtbare eingebackene Haare oder Kleidung
@@ -88,6 +89,7 @@ python3 -m http.server 8899
 - `npm run test:portal`: Chat-Isolation und Portalwechsel zwischen zwei Spaces
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
 - `npm run test:templates`: zehn Designs, Persistenz, Deep-Link-Join und Fallback für ältere Räume
+- `npm run test:room-creation`: einzigartige Namensvorschläge, sichtbare Titel und unterschiedliche Deep Links
 - `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
 - `npm run test:camera-follow`: automatische Kameraausrichtung bei WASD und freies Drehen im Stand
 - `node tests/ten-person-smoke.mjs`: WebRTC-Mesh-Regression mit zehn Personen

@@ -31,6 +31,8 @@ const AVATAR_STORAGE_KEY = 'mr-avatar-profile';
 const LAST_SPACES_KEY = 'metaverse-reloaded:last-spaces';
 const MAX_RECENT_SPACES = 8;
 const DEFAULT_SPACE_TEMPLATE = 'neon-stage';
+const ROOM_NAME_PREFIXES = Object.freeze(['Aurora', 'Cosmic', 'Electric', 'Lunar', 'Nova', 'Orbit', 'Pixel', 'Solar', 'Stellar', 'Velvet']);
+const ROOM_NAME_PLACES = Object.freeze(['Arena', 'Atelier', 'Garden', 'Lounge', 'Studio', 'Forum', 'Lab', 'Loft', 'Plaza', 'Stage']);
 const SPACE_TEMPLATES = Object.freeze({
   'neon-stage': { label: 'Neon Stage', background: 0x05070d, fog: 0x070a12, fogDensity: .018, floor: 0x0a0e19, grid: 0x365b87, gridSecondary: 0x172337, primary: 0x56dfff, secondary: 0x7565ff, sky: 0xb9d9ff, ground: 0x080a12, key: 0xaad8ff, decor: 'city' },
   'alpine-summit': { label: 'Alpine Summit', background: 0x86b9d8, fog: 0xc9e5ef, fogDensity: .012, floor: 0x9eb8bd, grid: 0xe8fbff, gridSecondary: 0x738f98, primary: 0xeaffff, secondary: 0x4d88b8, sky: 0xf4fdff, ground: 0x405866, key: 0xffffff, decor: 'alpine' },
@@ -207,6 +209,21 @@ function randomSegment(length) {
   return [...bytes].map(value => alphabet[value % alphabet.length]).join('');
 }
 
+function randomItem(items) {
+  const [value] = crypto.getRandomValues(new Uint32Array(1));
+  return items[value % items.length];
+}
+
+function newSuggestedRoomTitle() {
+  return `${randomItem(ROOM_NAME_PREFIXES)} ${randomItem(ROOM_NAME_PLACES)} ${randomSegment(6)}`;
+}
+
+function setSuggestedRoomTitle() {
+  const title = newSuggestedRoomTitle();
+  ui.roomName.value = title;
+  ui.roomName.dataset.generatedRoomName = title;
+}
+
 function newInviteCode(role) {
   return `${role === 'cohost' ? 'COHOST' : 'GUEST'}-${randomSegment(4)}-${randomSegment(4)}`;
 }
@@ -241,9 +258,17 @@ async function hashInviteCode(value) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createUniqueRoom(title, templateId = DEFAULT_SPACE_TEMPLATE) {
-  const roomTitle = String(title || '').trim().replace(/\s+/g, ' ');
+async function createUniqueRoom(title, templateId = DEFAULT_SPACE_TEMPLATE, generatedTitle = false) {
+  let roomTitle = String(title || '').trim().replace(/\s+/g, ' ');
   if (roomTitle.length < 2) throw new Error('Bitte gib deinem Raum einen Namen mit mindestens zwei Zeichen.');
+  if (generatedTitle) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const titleCollision = await dbGet('rooms', { title: roomTitle, status: 'active' }, 1);
+      if (!titleCollision.length) break;
+      roomTitle = newSuggestedRoomTitle();
+      if (attempt === 5) throw new Error('Der eindeutige Raumname konnte nicht erzeugt werden. Bitte versuche es nochmals.');
+    }
+  }
   for (let attempt = 0; attempt < 6; attempt++) {
     const guest = newInviteCode('guest');
     const cohost = newInviteCode('cohost');
@@ -2319,8 +2344,10 @@ async function joinEvent(event) {
   submit.disabled = true;
   ui.joinError.textContent = '';
   try {
+    const requestedRoomTitle = String(form.get('room-name') || '').trim().replace(/\s+/g, ' ');
+    const generatedRoomTitle = requestedRoomTitle === ui.roomName.dataset.generatedRoomName;
     const access = state.entryMode === 'create'
-      ? await createUniqueRoom(form.get('room-name'), form.get('room-template'))
+      ? await createUniqueRoom(requestedRoomTitle, form.get('room-template'), generatedRoomTitle)
       : state.entryMode === 'public'
         ? state.publicAccess || await resolvePublicRoom(new URLSearchParams(location.search).get('room'))
         : await resolveInviteCode(form.get('invite-code'));
@@ -2523,13 +2550,16 @@ function bindUi() {
   syncJoinViewport();
   setAvatarControls(loadAvatarProfile());
   ui.name.value = localStorage.getItem('mr-display-name') || '';
-  ui.roomName.value = 'Mein Metaverse';
+  setSuggestedRoomTitle();
   ui.inviteCode.value = normalizeInviteCode(new URLSearchParams(location.search).get('invite') || '');
   ui.eventLabel.textContent = 'NEW SPACE';
   setEntryMode(state.entryMode);
   $$('[data-entry-mode]').forEach(button => button.addEventListener('click', () => setEntryMode(button.dataset.entryMode)));
   ui.avatarCustomizer.addEventListener('input', updateAvatarProfileFromControls);
   ui.avatarCustomizer.addEventListener('change', updateAvatarProfileFromControls);
+  ui.roomName.addEventListener('input', () => {
+    if (ui.roomName.value !== ui.roomName.dataset.generatedRoomName) delete ui.roomName.dataset.generatedRoomName;
+  });
   ui.inviteCode.addEventListener('blur', () => { ui.inviteCode.value = normalizeInviteCode(ui.inviteCode.value); });
   ui.joinForm.addEventListener('focusin', () => setTimeout(syncJoinViewport, 60));
   for (const input of [ui.roomName, ui.inviteCode]) {

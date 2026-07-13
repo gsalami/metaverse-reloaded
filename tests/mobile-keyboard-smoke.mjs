@@ -63,7 +63,12 @@ try {
   await page.route('**/_db/**', mockDb);
   await page.goto(origin, { waitUntil: 'networkidle', timeout: 30_000 });
   await page.fill('#display-name', 'Mobile Creator');
-  await page.fill('#room-name', 'Keyboard Space');
+  const suggestedTitle = (await page.inputValue('#room-name')).trim();
+  assert.ok(suggestedTitle.length >= 4, 'mobile create flow should start with a suggested room title');
+  assert.doesNotMatch(suggestedTitle, /^mein(?:e[rs]?)? metaverse$/i);
+  const selectedTemplateId = 'arctic-aurora';
+  await page.check(`input[name="room-template"][value="${selectedTemplateId}"]`, { force: true });
+  assert.equal(await page.locator('input[name="room-template"]:checked').inputValue(), selectedTemplateId);
   await page.focus('#room-name');
   await page.evaluate(() => window.__setKeyboardViewport(430));
   await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--join-vv-height').trim() === '430px');
@@ -90,8 +95,14 @@ try {
   await page.click('#join-form .enter-button');
   await page.waitForFunction(() => window.__mrDiag?.joined === true);
   assert.equal(await page.evaluate(() => window.__mrDiag.role), 'host');
+  const createdRoom = tables.rooms.find(room => room.title === suggestedTitle);
+  assert.ok(createdRoom?.room_id, 'mobile submit creates the suggested room');
+  assert.equal(tables.room_templates.find(mapping => mapping.room_id === createdRoom.room_id)?.template_id, selectedTemplateId);
+  assert.equal(await page.evaluate(() => window.__mrDiag.templateId), selectedTemplateId);
+  assert.equal(await page.locator('#event-label').textContent(), suggestedTitle.toUpperCase());
+  assert.equal(new URL(page.url()).searchParams.get('room'), createdRoom.room_id);
   assert.deepEqual(errors, []);
-  console.log('mobile-keyboard-smoke: ok', JSON.stringify({ visualViewport: 430, submitVisible: true, safariAutoZoomPrevented: true, roomCreated: true }));
+  console.log('mobile-keyboard-smoke: ok', JSON.stringify({ visualViewport: 430, submitVisible: true, safariAutoZoomPrevented: true, roomCreated: true, templateSelected: selectedTemplateId, suggestedTitle }));
   await context.close();
 } finally {
   await browser.close();

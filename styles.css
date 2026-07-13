@@ -377,6 +377,7 @@ dialog::backdrop { background: rgba(2,4,9,.82); backdrop-filter: blur(15px); }
   .join-dialog[open] { display: block; }
   .join-visual { display: none; }
   .join-form { height: 100%; min-height: 0; max-height: 100%; padding: max(28px, env(safe-area-inset-top)) 24px max(72px, calc(env(safe-area-inset-bottom) + 32px)); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scroll-padding-block: 24px 96px; justify-content: flex-start; }
+  .join-form > .enter-button { position: sticky; z-index: 8; bottom: max(8px, env(safe-area-inset-bottom)); flex: 0 0 50px; width: 100%; margin-top: 2px; touch-action: manipulation; box-shadow: 0 -18px 30px 12px rgba(9,13,24,.94), 0 12px 32px rgba(79,124,255,.2); }
   #display-name, #room-name, #invite-code { font-size: 16px; }
   .join-brand { margin-bottom: 42px; }
   .join-form h1 { font-size: clamp(38px, 12vw, 54px); }
