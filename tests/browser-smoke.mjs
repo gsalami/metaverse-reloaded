@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const output = new URL('../output/', import.meta.url);
-const tables = { presence: [], messages: [{ _id: 1, event_id: 'main-stage', client_id: 'system', name: 'Metaverse', text: 'Willkommen im Test.', mentions: [], created_at: new Date().toISOString() }], signals: [], rooms: [], portals: [], avatars: [] };
+const tables = { presence: [], messages: [{ _id: 1, event_id: 'main-stage', client_id: 'system', name: 'Metaverse', text: 'Willkommen im Test.', mentions: [], created_at: new Date().toISOString() }], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
 let nextId = 10;
 
 async function mockDb(route) {

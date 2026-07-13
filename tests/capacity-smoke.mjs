@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
-const tables = { presence: [], messages: [], signals: [], rooms: [], portals: [], avatars: [] };
+const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
 let nextId = 1;
 
 async function mockDb(route) {

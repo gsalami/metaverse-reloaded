@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const tables = { presence: [], messages: [], signals: [], rooms: [], portals: [], avatars: [] };
+const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
 let nextId = 1;
 
 const server = createServer(async (request, response) => {

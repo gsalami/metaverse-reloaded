@@ -6,7 +6,7 @@ const live = process.env.MR_LIVE === '1';
 const base = process.env.MR_URL || 'http://127.0.0.1:8899/';
 const room = `Test Ten ${Date.now()}`;
 const output = new URL('../output/', import.meta.url);
-const tables = { presence: [], messages: [], signals: [], rooms: [], portals: [], avatars: [] };
+const tables = { presence: [], messages: [], signals: [], rooms: [], room_templates: [], portals: [], avatars: [] };
 let nextId = 1;
 
 async function database(route) {

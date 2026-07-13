@@ -10,6 +10,7 @@
 
 - elegante futuristische 3D-Welt für Desktop und Mobile
 - iPhone-taugliche Raum-Erstellung mit tastaturabhängigem Dialog und ohne Safari-Fokuszoom
+- zehn auswählbare, mobile-fähige Raum-Templates von Alpine Summit bis Ocean Dome
 - KayKit-Rogue-Rig aus Kuble Office mit Idle-, Lauf-, Sitz- und Cheer-Animation
 - neutraler Basis-Body ohne sichtbare eingebackene Haare oder Kleidung
 - Avatar-Konfigurator mit Outfitfarbe, Haarfarbe, vier Haarmodulen und drei animierten 3D-Outfitmodulen
@@ -34,7 +35,7 @@
 ## Nutzung
 
 1. Seite öffnen und Namen eingeben.
-2. `Raum erstellen` wählen und einen Raumnamen vergeben. Der Creator ist automatisch Host.
+2. `Raum erstellen` wählen, einen Namen und eines der zehn Designs festlegen. Der Creator ist automatisch Host.
 3. Alternativ `Raum beitreten` wählen und einen Guest- oder Cohost-Code eingeben. Die Rolle wird automatisch gesetzt.
    Ein öffentlicher Deep Link `/?room=RAUM-ID` öffnet den Zielraum direkt als Guest-Zugang.
 4. Mit `W A S D`, Pfeiltasten oder dem mobilen Steuerkreuz bewegen.
@@ -53,6 +54,7 @@ Screensharing hängt von der Browserunterstützung ab. Desktop-Chrome und Deskto
 - `/_db/chat/messages`: Textchat und Mentions
 - `/_db/realtime/signals`: atomare WebRTC-Angebote und Antworten inklusive ICE Candidates
 - `/_db/spaces/rooms`: eindeutige Räume und SHA-256-Hashes der Invite-Codes
+- `/_db/spaces/room_templates`: persistente Design-Zuordnung pro Raum mit Fallback für ältere Räume
 - `/_db/spaces/portals`: aktive Verbindungen zwischen Spaces
 - `/_db/profiles/avatars`: raumbezogene Avatarprofile für die Remote-Darstellung
 - WebRTC Mesh: Host-Audio, Screenshare und Avatarbewegung
@@ -84,6 +86,7 @@ python3 -m http.server 8899
 - `npm run test:multiuser`: Host, Guest und Cohost, Avatar-Synchronisation, Voice, Screen, Chat und Raumkontrolle
 - `npm run test:portal`: Chat-Isolation und Portalwechsel zwischen zwei Spaces
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
+- `npm run test:templates`: zehn Designs, Persistenz, Deep-Link-Join und Fallback für ältere Räume
 - `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
 - `node tests/ten-person-smoke.mjs`: WebRTC-Mesh-Regression mit zehn Personen
 - `node tests/capacity-smoke.mjs`: 25 Personen, Guest-only Seat all mit Auto-Lock und Ablehnung der 26. Person

@@ -10,6 +10,7 @@ const DB_PATHS = {
   messages: '/_db/chat/messages',
   signals: '/_db/realtime/signals',
   rooms: '/_db/spaces/rooms',
+  roomTemplates: '/_db/spaces/room_templates',
   portals: '/_db/spaces/portals',
   avatars: '/_db/profiles/avatars'
 };
@@ -29,6 +30,19 @@ const POLL_PORTALS_MS = 4_000;
 const AVATAR_STORAGE_KEY = 'mr-avatar-profile';
 const LAST_SPACES_KEY = 'metaverse-reloaded:last-spaces';
 const MAX_RECENT_SPACES = 8;
+const DEFAULT_SPACE_TEMPLATE = 'neon-stage';
+const SPACE_TEMPLATES = Object.freeze({
+  'neon-stage': { label: 'Neon Stage', background: 0x05070d, fog: 0x070a12, fogDensity: .018, floor: 0x0a0e19, grid: 0x365b87, gridSecondary: 0x172337, primary: 0x56dfff, secondary: 0x7565ff, sky: 0xb9d9ff, ground: 0x080a12, key: 0xaad8ff, decor: 'city' },
+  'alpine-summit': { label: 'Alpine Summit', background: 0x86b9d8, fog: 0xc9e5ef, fogDensity: .012, floor: 0x9eb8bd, grid: 0xe8fbff, gridSecondary: 0x738f98, primary: 0xeaffff, secondary: 0x4d88b8, sky: 0xf4fdff, ground: 0x405866, key: 0xffffff, decor: 'alpine' },
+  'tropical-island': { label: 'Tropical Island', background: 0x3aa8c7, fog: 0x8ee5e0, fogDensity: .01, floor: 0xd5b66d, grid: 0xffe2a2, gridSecondary: 0x5e9e87, primary: 0x54ffd0, secondary: 0xffbf5b, sky: 0xd8ffff, ground: 0x245a5a, key: 0xfff2c7, decor: 'tropical' },
+  'mars-base': { label: 'Mars Base', background: 0x2d0d0a, fog: 0x5b2118, fogDensity: .02, floor: 0x4d2019, grid: 0xff7b52, gridSecondary: 0x6b2c24, primary: 0xff744d, secondary: 0xffc16b, sky: 0xffb08c, ground: 0x1b0808, key: 0xffd0ae, decor: 'mars' },
+  'cyber-city': { label: 'Cyber City', background: 0x080313, fog: 0x170725, fogDensity: .022, floor: 0x100b1c, grid: 0xff3edf, gridSecondary: 0x302052, primary: 0x00f7ff, secondary: 0xff39d4, sky: 0x9ddcff, ground: 0x12051d, key: 0xe4c1ff, decor: 'cyber' },
+  'zen-garden': { label: 'Zen Garden', background: 0x18231d, fog: 0x42584b, fogDensity: .017, floor: 0x7d806b, grid: 0xc8d2ad, gridSecondary: 0x596254, primary: 0xd6edb2, secondary: 0xc98a67, sky: 0xdcebd0, ground: 0x1d2b22, key: 0xfff2d8, decor: 'zen' },
+  'moon-station': { label: 'Moon Station', background: 0x010207, fog: 0x080b15, fogDensity: .009, floor: 0x686d78, grid: 0xcbd3e4, gridSecondary: 0x333a49, primary: 0xdce8ff, secondary: 0x5d7fff, sky: 0xd9e7ff, ground: 0x03040a, key: 0xffffff, decor: 'moon' },
+  'ocean-dome': { label: 'Ocean Dome', background: 0x001b2b, fog: 0x063a49, fogDensity: .024, floor: 0x123c46, grid: 0x57dbdc, gridSecondary: 0x1a5662, primary: 0x64fff1, secondary: 0x4c79ff, sky: 0x7defff, ground: 0x001219, key: 0xb9ffff, decor: 'ocean' },
+  'desert-festival': { label: 'Desert Festival', background: 0x3b1d16, fog: 0xa95b36, fogDensity: .013, floor: 0x9b633c, grid: 0xffc879, gridSecondary: 0x76462e, primary: 0xffd26f, secondary: 0xff5e74, sky: 0xffd4a4, ground: 0x3c2116, key: 0xffead0, decor: 'desert' },
+  'arctic-aurora': { label: 'Arctic Aurora', background: 0x061323, fog: 0x1a4051, fogDensity: .016, floor: 0x92b8c4, grid: 0xb9ffff, gridSecondary: 0x426b7c, primary: 0x5dffd2, secondary: 0xa274ff, sky: 0xcaffff, ground: 0x0a2430, key: 0xeaffff, decor: 'arctic' }
+});
 const HAIR_STYLES = new Set(['none', 'short', 'bob', 'mohawk']);
 const OUTFIT_STYLES = new Set(['rogue', 'explorer', 'cyber']);
 const DEFAULT_AVATAR_PROFILE = Object.freeze({
@@ -54,6 +68,7 @@ const state = {
   clientId: crypto.randomUUID(),
   eventId: '',
   roomTitle: '',
+  templateId: DEFAULT_SPACE_TEMPLATE,
   roomOwner: false,
   inviteCodes: null,
   entryMode: new URLSearchParams(location.search).has('room') ? 'public' : new URLSearchParams(location.search).has('invite') ? 'join' : 'create',
@@ -197,12 +212,33 @@ function normalizeInviteCode(value) {
   return String(value || '').trim().toUpperCase().replace(/[–—−]/g, '-').replace(/\s+/g, '-').replace(/[^A-Z0-9-]/g, '').replace(/-+/g, '-');
 }
 
+function normalizeSpaceTemplate(value) {
+  return Object.hasOwn(SPACE_TEMPLATES, value) ? value : DEFAULT_SPACE_TEMPLATE;
+}
+
+async function loadRoomTemplate(roomId) {
+  try {
+    const rows = await dbGet('roomTemplates', { room_id: roomId }, 20);
+    const latest = rows.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+    return normalizeSpaceTemplate(latest?.template_id);
+  } catch (error) {
+    console.warn('[room-template]', error);
+    return DEFAULT_SPACE_TEMPLATE;
+  }
+}
+
+async function saveRoomTemplate(roomId, templateId) {
+  const row = { room_id: roomId, template_id: normalizeSpaceTemplate(templateId), updated_at: new Date().toISOString() };
+  await dbPost('roomTemplates', row);
+  return row.template_id;
+}
+
 async function hashInviteCode(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalizeInviteCode(value)));
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function createUniqueRoom(title) {
+async function createUniqueRoom(title, templateId = DEFAULT_SPACE_TEMPLATE) {
   const roomTitle = String(title || '').trim().replace(/\s+/g, ' ');
   if (roomTitle.length < 2) throw new Error('Bitte gib deinem Raum einen Namen mit mindestens zwei Zeichen.');
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -226,8 +262,9 @@ async function createUniqueRoom(title) {
       status: 'active',
       created_at: new Date().toISOString()
     };
+    const selectedTemplate = await saveRoomTemplate(roomId, templateId);
     await reliableDbPost('rooms', row, { room_id: roomId });
-    const room = { roomId, title: row.title, role: 'host', roomOwner: true, inviteCodes: { guest, cohost } };
+    const room = { roomId, title: row.title, role: 'host', roomOwner: true, inviteCodes: { guest, cohost }, templateId: selectedTemplate };
     localStorage.setItem(`mr-room-owner:${roomId}`, JSON.stringify({ ...room.inviteCodes, title: room.title }));
     return room;
   }
@@ -242,7 +279,8 @@ async function resolveInviteCode(value) {
   const rows = await dbGet('rooms', { [field]: hash, status: 'active' }, 2);
   const room = rows[0];
   if (!room) throw new Error('Dieser Invite-Code ist ungültig oder nicht mehr aktiv.');
-  return { roomId: room.room_id, title: room.title, role: field === 'cohost_code_hash' ? 'cohost' : 'guest', roomOwner: false, inviteCodes: null };
+  const templateId = await loadRoomTemplate(room.room_id);
+  return { roomId: room.room_id, title: room.title, role: field === 'cohost_code_hash' ? 'cohost' : 'guest', roomOwner: false, inviteCodes: null, templateId };
 }
 
 async function resolvePublicRoom(value) {
@@ -251,7 +289,8 @@ async function resolvePublicRoom(value) {
   const rows = await dbGet('rooms', { room_id: roomId, status: 'active' }, 2);
   const room = rows[0];
   if (!room) throw new Error('Dieser öffentliche Space ist nicht mehr aktiv.');
-  return { roomId: room.room_id, title: room.title, role: 'guest', roomOwner: false, inviteCodes: null };
+  const templateId = await loadRoomTemplate(room.room_id);
+  return { roomId: room.room_id, title: room.title, role: 'guest', roomOwner: false, inviteCodes: null, templateId };
 }
 
 function rememberVisitedSpace(roomId, title) {
@@ -474,32 +513,38 @@ const world = {
   videoTexture: null,
   model: null,
   clips: [],
-  modelPromise: null
+  modelPromise: null,
+  built: false,
+  templateDecorations: 0
 };
 
-function addWorld() {
-  scene.add(new THREE.HemisphereLight(0xb9d9ff, 0x080a12, 1.45));
-  const key = new THREE.DirectionalLight(0xaad8ff, MOBILE ? 1.3 : 2.2);
+function addWorld(templateId = DEFAULT_SPACE_TEMPLATE) {
+  if (world.built) return;
+  const template = SPACE_TEMPLATES[normalizeSpaceTemplate(templateId)];
+  scene.background = new THREE.Color(template.background);
+  scene.fog = new THREE.FogExp2(template.fog, MOBILE ? template.fogDensity * 1.28 : template.fogDensity);
+  scene.add(new THREE.HemisphereLight(template.sky, template.ground, 1.45));
+  const key = new THREE.DirectionalLight(template.key, MOBILE ? 1.3 : 2.2);
   key.position.set(9, 16, 8);
   key.castShadow = !MOBILE;
   key.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024);
   scene.add(key);
-  const cyan = new THREE.PointLight(0x54eaff, 28, 28, 2);
+  const cyan = new THREE.PointLight(template.primary, 28, 28, 2);
   cyan.position.set(-7, 5, -5);
   scene.add(cyan);
-  const violet = new THREE.PointLight(0x8c6cff, 25, 26, 2);
+  const violet = new THREE.PointLight(template.secondary, 25, 26, 2);
   violet.position.set(8, 4, 3);
   scene.add(violet);
 
   const floor = new THREE.Mesh(
     new THREE.CircleGeometry(28, MOBILE ? 64 : 128),
-    new THREE.MeshStandardMaterial({ color: 0x0a0e19, metalness: .76, roughness: .3 })
+    new THREE.MeshStandardMaterial({ color: template.floor, metalness: .64, roughness: .42 })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const grid = new THREE.GridHelper(48, 48, 0x365b87, 0x172337);
+  const grid = new THREE.GridHelper(48, 48, template.grid, template.gridSecondary);
   grid.position.y = .015;
   grid.material.opacity = .22;
   grid.material.transparent = true;
@@ -507,7 +552,7 @@ function addWorld() {
 
   const innerRing = new THREE.Mesh(
     new THREE.RingGeometry(7.8, 7.9, 96),
-    new THREE.MeshBasicMaterial({ color: 0x56dfff, transparent: true, opacity: .42, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({ color: template.primary, transparent: true, opacity: .42, side: THREE.DoubleSide })
   );
   innerRing.rotation.x = -Math.PI / 2;
   innerRing.position.y = .025;
@@ -515,7 +560,7 @@ function addWorld() {
 
   const outerRing = new THREE.Mesh(
     new THREE.TorusGeometry(19.4, .045, 8, 160),
-    new THREE.MeshBasicMaterial({ color: 0x7565ff, transparent: true, opacity: .58 })
+    new THREE.MeshBasicMaterial({ color: template.secondary, transparent: true, opacity: .58 })
   );
   outerRing.rotation.x = Math.PI / 2;
   outerRing.position.y = .05;
@@ -523,8 +568,9 @@ function addWorld() {
 
   buildStage();
   buildSeating();
-  buildSkyline();
-  if (!MOBILE) addParticles();
+  buildTemplateDecorations(template);
+  if (!MOBILE) addParticles(template.primary);
+  world.built = true;
 }
 
 function buildStage() {
@@ -846,22 +892,89 @@ async function resumePortalTravel() {
   notify(`Portal angekommen: Du bist jetzt in „${portal.target_title}“.`, 'success');
 }
 
-function buildSkyline() {
-  const glass = new THREE.MeshStandardMaterial({ color: 0x162542, metalness: .62, roughness: .18, transparent: true, opacity: .5 });
-  const glow = new THREE.MeshBasicMaterial({ color: 0x4b7fff, transparent: true, opacity: .18, wireframe: true });
-  const count = MOBILE ? 12 : 22;
+function addTemplateDecoration(object, x, y, z) {
+  object.position.set(x, y, z);
+  scene.add(object);
+  world.templateDecorations++;
+}
+
+function buildTemplateDecorations(template) {
+  const count = MOBILE ? 10 : 20;
+  const primary = new THREE.MeshStandardMaterial({ color: template.primary, roughness: .62, metalness: .12 });
+  const secondary = new THREE.MeshStandardMaterial({ color: template.secondary, roughness: .55, metalness: .18 });
+  const dark = new THREE.MeshStandardMaterial({ color: template.ground, roughness: .8, metalness: .08 });
+  const glow = new THREE.MeshBasicMaterial({ color: template.primary, transparent: true, opacity: .32, wireframe: true });
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
-    const radius = 23 + (i % 3) * 2.2;
-    const height = 4 + (i % 5) * 1.7;
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(.6 + (i % 2) * .3, 1.2, height, i % 2 ? 6 : 8), i % 3 ? glass : glow);
-    tower.position.set(Math.cos(angle) * radius, height / 2, Math.sin(angle) * radius);
-    tower.rotation.y = angle;
-    scene.add(tower);
+    const radius = 22.5 + (i % 3) * 2.2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    const height = 3.4 + (i % 5) * 1.35;
+    let object;
+    let y = height / 2;
+    if (template.decor === 'alpine' || template.decor === 'arctic') {
+      object = new THREE.Mesh(new THREE.ConeGeometry(2.2 + (i % 3) * .55, height + 2.5, 5), i % 3 ? dark : primary);
+      object.rotation.y = angle;
+      if (template.decor === 'arctic') object.scale.x = .62;
+    } else if (template.decor === 'tropical') {
+      object = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.18, .3, height, 7), dark);
+      trunk.position.y = height / 2;
+      object.add(trunk);
+      for (let leaf = 0; leaf < 5; leaf++) {
+        const crown = new THREE.Mesh(new THREE.ConeGeometry(.55, 2.3, 5), primary);
+        crown.position.y = height;
+        crown.rotation.z = Math.PI / 2.8;
+        crown.rotation.y = leaf / 5 * Math.PI * 2;
+        object.add(crown);
+      }
+      addTemplateDecoration(object, x, 0, z);
+      continue;
+    } else if (template.decor === 'mars') {
+      object = i % 4 === 0
+        ? new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), glow)
+        : new THREE.Mesh(new THREE.DodecahedronGeometry(1 + (i % 3) * .4, 0), i % 2 ? secondary : dark);
+      y = i % 4 === 0 ? 0 : 1;
+    } else if (template.decor === 'zen') {
+      object = new THREE.Group();
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(.75 + (i % 3) * .35, 1), dark);
+      rock.scale.y = .55;
+      object.add(rock);
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(1.1 + (i % 2) * .35, 9, 6), primary);
+      crown.scale.y = .55;
+      crown.position.y = 1.5;
+      object.add(crown);
+      addTemplateDecoration(object, x, 0, z);
+      continue;
+    } else if (template.decor === 'moon') {
+      object = i % 4 === 0
+        ? new THREE.Mesh(new THREE.TorusGeometry(1.5, .16, 8, 28), secondary)
+        : new THREE.Mesh(new THREE.DodecahedronGeometry(.7 + (i % 4) * .28, 1), dark);
+      if (i % 4 === 0) object.rotation.x = Math.PI / 2;
+      y = i % 4 === 0 ? .14 : .75;
+    } else if (template.decor === 'ocean') {
+      object = new THREE.Group();
+      for (let branch = 0; branch < 3; branch++) {
+        const coral = new THREE.Mesh(new THREE.CylinderGeometry(.12, .28, 2.2 + branch * .6, 7), branch % 2 ? secondary : primary);
+        coral.position.set((branch - 1) * .45, 1 + branch * .25, 0);
+        coral.rotation.z = (branch - 1) * .22;
+        object.add(coral);
+      }
+      addTemplateDecoration(object, x, 0, z);
+      continue;
+    } else if (template.decor === 'desert') {
+      object = i % 3 === 0
+        ? new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.8, 4), secondary)
+        : new THREE.Mesh(new THREE.CylinderGeometry(.22, .34, 3.2 + (i % 2), 7), primary);
+      y = i % 3 === 0 ? 1.4 : 1.7 + (i % 2) * .5;
+    } else {
+      object = new THREE.Mesh(new THREE.CylinderGeometry(.6 + (i % 2) * .3, 1.2, height, i % 2 ? 6 : 8), i % 3 ? dark : glow);
+    }
+    addTemplateDecoration(object, x, y, z);
   }
 }
 
-function addParticles() {
+function addParticles(color = 0x91e9ff) {
   const count = 380;
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i++) {
@@ -873,7 +986,7 @@ function addParticles() {
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const points = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0x91e9ff, size: .045, transparent: true, opacity: .6 }));
+  const points = new THREE.Points(geometry, new THREE.PointsMaterial({ color, size: .045, transparent: true, opacity: .6 }));
   scene.add(points);
   world.animated.push({ object: points, type: 'turn', speed: .008 });
 }
@@ -2191,7 +2304,7 @@ async function joinEvent(event) {
   ui.joinError.textContent = '';
   try {
     const access = state.entryMode === 'create'
-      ? await createUniqueRoom(form.get('room-name'))
+      ? await createUniqueRoom(form.get('room-name'), form.get('room-template'))
       : state.entryMode === 'public'
         ? state.publicAccess || await resolvePublicRoom(new URLSearchParams(location.search).get('room'))
         : await resolveInviteCode(form.get('invite-code'));
@@ -2205,11 +2318,15 @@ async function joinEvent(event) {
   }
 }
 
-async function enterRoom({ roomId, title, role, roomOwner, inviteCodes, name }) {
-  const people = await currentPeople(roomId);
+async function enterRoom({ roomId, title, role, roomOwner, inviteCodes, name, templateId = null }) {
+  const [people, resolvedTemplate] = await Promise.all([
+    currentPeople(roomId),
+    templateId ? Promise.resolve(normalizeSpaceTemplate(templateId)) : loadRoomTemplate(roomId)
+  ]);
   if (people.length >= MAX_PEOPLE) throw new Error(`Dieser Raum ist bereits voll. Maximal ${MAX_PEOPLE} Personen können teilnehmen.`);
   state.eventId = roomId;
   state.roomTitle = title;
+  state.templateId = resolvedTemplate;
   state.roomOwner = roomOwner;
   state.inviteCodes = inviteCodes;
   state.name = name;
@@ -2226,6 +2343,7 @@ async function enterRoom({ roomId, title, role, roomOwner, inviteCodes, name }) 
   ui.chatRoomScope.textContent = `ROOM: ${title.toUpperCase()}`;
   const spawnIndex = people.length;
   const angle = (spawnIndex / MAX_PEOPLE) * Math.PI * 2;
+  addWorld(state.templateId);
   await saveAvatarProfile();
   createAvatar({ client_id: state.clientId, name, role, color: state.color, avatarProfile: state.avatarProfile, x: Math.sin(angle) * 3.2, z: 5 + Math.cos(angle) * 2.2, rotation: Math.PI }, true);
   state.joined = true;
@@ -2543,6 +2661,10 @@ Object.defineProperty(window, '__mrDiag', {
       role: state.role,
       eventId: state.eventId,
       roomTitle: state.roomTitle,
+      templateId: state.templateId,
+      templateLabel: SPACE_TEMPLATES[state.templateId]?.label || SPACE_TEMPLATES[DEFAULT_SPACE_TEMPLATE].label,
+      availableTemplateIds: Object.keys(SPACE_TEMPLATES),
+      templateDecorations: world.templateDecorations,
       roomOwner: state.roomOwner,
       inviteCodes: state.roomOwner ? state.inviteCodes : null,
       avatarProfile: { ...state.avatarProfile },
@@ -2602,7 +2724,6 @@ Object.defineProperty(window, '__mrDiag', {
   }
 });
 
-addWorld();
 bindUi();
 loadAvatarModel();
 animate();
