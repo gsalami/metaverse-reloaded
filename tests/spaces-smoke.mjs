@@ -90,11 +90,16 @@ try {
   assert.equal(await zurich.locator('.room-id').textContent(), 'Raum-ID: space-zurich');
   assert.equal(await zurich.locator('.join-link').getAttribute('href'), `${origin}/?room=space-zurich`);
 
-  assert.equal(await page.locator('#recent-count').textContent(), '2', 'recent rooms are deduplicated');
+  assert.equal(await page.locator('#recent-count').textContent(), '1', 'deleted recent rooms are pruned');
   const recentFirst = page.locator('#recent-spaces .space-card').first();
   assert.equal(await recentFirst.getAttribute('data-room-id'), 'space-zurich', 'latest visit first');
   assert.match(await recentFirst.locator('time').textContent(), /^Besucht /);
   assert.equal(await recentFirst.locator('.join-link').getAttribute('href'), `${origin}/?room=space-zurich`);
+  assert.deepEqual(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('metaverse-reloaded:last-spaces') || '[]').map(room => room.room_id || room.roomId)),
+    ['space-zurich'],
+    'local history no longer keeps deleted room links'
+  );
 
   await zurich.locator('.copy-link').click();
   await page.waitForFunction(() => document.querySelector('#public-spaces [data-room-id="space-zurich"] .copy-status')?.textContent.includes('kopiert'));
@@ -114,7 +119,7 @@ try {
   await mobile.goto(`${origin}/spaces.html`);
   await mobile.waitForFunction(() => document.querySelectorAll('#public-spaces .space-card').length === 3);
   assert.equal(await mobile.locator('#public-spaces .space-card').count(), 3);
-  assert.equal(await mobile.locator('#recent-spaces .space-card').count(), 2);
+  assert.equal(await mobile.locator('#recent-spaces .space-card').count(), 1);
 
   assert.deepEqual(errors, []);
   console.log('spaces-smoke: ok', JSON.stringify({ activeOnly: true, deepLinks: true, copy: true, recent: true, polling: true, xssSafe: true, error: true, mobile: true }));

@@ -157,6 +157,20 @@ function recentRooms() {
   }
 }
 
+function pruneDeletedRecentSpaces(activeRooms) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LAST_SPACES_KEY) || '[]');
+    if (!Array.isArray(stored)) return;
+    const activeIds = new Set(activeRooms.map(room => room.roomId));
+    const remaining = stored.filter(room => activeIds.has(roomIdOf(room)));
+    if (remaining.length !== stored.length) {
+      localStorage.setItem(LAST_SPACES_KEY, JSON.stringify(remaining));
+    }
+  } catch {
+    // Ignore malformed local history; recentRooms() already handles it safely.
+  }
+}
+
 async function copyDeepLink(room, button, status) {
   const link = deepLink(room.roomId);
   try {
@@ -275,7 +289,10 @@ async function fetchOwnRooms() {
 }
 
 async function refreshPublic() {
-  renderPublic(newestRooms(await fetchPublicRooms()));
+  const rooms = newestRooms(await fetchPublicRooms());
+  renderPublic(rooms);
+  pruneDeletedRecentSpaces(rooms);
+  renderRecent();
   setSync('synced', 'Live synchronisiert');
 }
 

@@ -21,7 +21,8 @@ const INITIAL_TASKS = [
   ['unique-room-name-mobile-create', 'Unique Raumnamen und mobile Erstellung', 'Erledigt', 'Hoch', 'Jede neue Seite schlägt einen einzigartigen sichtbaren Raumnamen vor; der mobile Create-Button bleibt auch über der iPhone-Tastatur sichtbar und anklickbar.'],
   ['distinct-room-architectures', 'Unterschiedliche Raumgrössen und Architekturen', 'Erledigt', 'Hoch', 'Zehn eigene Architekturen mit neun Raumabmessungen: unter anderem Alpine Lodge mit Kamin, Cyber Gallery, Zen Courtyard, Dome, Habitat und Festivalfläche; Mobile lädt reduzierte Architekturdetails.'],
   ['click-to-sit', 'Sitzplatz per Klick oder Tap auswählen', 'Erledigt', 'Hoch', 'Freie Sitze sind auf Desktop und Mobile direkt auswählbar; Belegung, Screen-Ausrichtung, Aufstehen, Lock und Multiuser-Synchronisation sind getestet.'],
-  ['accounts-metaverses', 'Magic-Link-Accounts und eigene Metaverses', 'Erledigt', 'Hoch', 'Supabase Auth mit Resend-Magic-Link, Row Level Security, Owner-Dashboard, Bearbeiten, Löschen und Invite-Code-Erneuerung sind produktiv umgesetzt und getestet.']
+  ['accounts-metaverses', 'Magic-Link-Accounts und eigene Metaverses', 'Erledigt', 'Hoch', 'Supabase Auth mit Resend-Magic-Link, Row Level Security, Owner-Dashboard, Bearbeiten, Löschen und Invite-Code-Erneuerung sind produktiv umgesetzt und getestet.'],
+  ['delete-ownerless-spaces', 'Alle Spaces ohne Owner löschen', 'Erledigt', 'Hoch', '14 Legacy-Spaces ohne Account-Owner wurden aus Supabase und der Host-Datenbank entfernt; Invites, Templates, Portale, Realtime-Daten und veraltete lokale Deep Links wurden bereinigt.']
 ];
 
 const elements = {

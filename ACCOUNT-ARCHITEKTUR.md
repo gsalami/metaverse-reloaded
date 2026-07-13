@@ -12,7 +12,7 @@ Eine Person erstellt einen Account, legt eigene Metaverses an, gestaltet Räume,
 - `spaces.html` zeigt angemeldeten Personen nur ihre eigenen Spaces zur Bearbeitung und zum Löschen.
 - Invite-Codes können owner-only erneuert werden. Supabase speichert ausschliesslich SHA-256-Hashes.
 - Öffentliche Deep Links, die öffentliche Space-Liste und der Beitritt per Guest- oder Cohost-Code funktionieren ohne Account.
-- Die 14 Räume aus der bisherigen Host-Datenbank wurden mit unveränderten Deep Links und Invite-Hashes importiert. Sie bleiben ohne Account-Owner, bis ein späterer Claim-Flow ergänzt wird.
+- Die 14 Räume aus der bisherigen Host-Datenbank wurden zunächst mit unveränderten Deep Links und Invite-Hashes importiert und danach auf Wunsch vollständig entfernt, weil sie keinen Account-Owner hatten.
 
 ## Empfohlener Aufbau
 
