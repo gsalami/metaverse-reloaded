@@ -11,7 +11,7 @@
 - elegante futuristische 3D-Welt für Desktop und Mobile
 - iPhone-taugliche Raum-Erstellung mit tastaturabhängigem Dialog und ohne Safari-Fokuszoom
 - automatisch vorgeschlagene, kollisionsgeprüfte Raumnamen statt generischem „Mein Metaverse“
-- zehn auswählbare, mobile-fähige Raum-Templates von Alpine Summit bis Ocean Dome
+- zehn auswählbare, mobile-fähige Architekturen mit neun unterschiedlichen Raumgrössen: Neon Arena, Alpine Lodge mit Kamin, Tropical Pavilion, Mars Habitat, Cyber Gallery, Zen Courtyard, Lunar Observatory, Ocean Dome, Desert Festival und Arctic Ice Hall
 - KayKit-Rogue-Rig aus Kuble Office mit Idle-, Lauf-, Sitz- und Cheer-Animation
 - neutraler Basis-Body ohne sichtbare eingebackene Haare oder Kleidung
 - Avatar-Konfigurator mit Outfitfarbe, Haarfarbe, vier Haarmodulen und drei animierten 3D-Outfitmodulen
@@ -89,6 +89,7 @@ python3 -m http.server 8899
 - `npm run test:portal`: Chat-Isolation und Portalwechsel zwischen zwei Spaces
 - `npm run test:spaces`: öffentliche Liste, Deep Links, letzte Spaces, Polling und Mobile-Layout
 - `npm run test:templates`: zehn Designs, Persistenz, Deep-Link-Join und Fallback für ältere Räume
+- `npm run test:architectures`: zehn eigenständige Architekturen, Raumgrössen, Kamin, Gallery, Mobile-Detailreduktion sowie 25 Sitzplätze
 - `npm run test:room-creation`: einzigartige Namensvorschläge, sichtbare Titel und unterschiedliche Deep Links
 - `npm run test:mobile-keyboard`: iOS-VisualViewport, sichtbarer Erstellen-Button und mobile Raum-Erstellung
 - `npm run test:camera-follow`: automatische Kameraausrichtung bei WASD und freies Drehen im Stand

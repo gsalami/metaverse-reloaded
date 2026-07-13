@@ -19,6 +19,7 @@ const INITIAL_TASKS = [
   ['ad999b7d-a1a0-4070-9f11-ec11c436b3ff', '10 weitere Raum-Templates', 'Erledigt', 'Mittel', 'Zehn mobile-fähige Designs sind bei der Raumerstellung auswählbar und werden pro Raum für Guests, Deep Links und Portale gespeichert.'],
   ['camera-auto-follow', 'Kamera beim Laufen automatisch hinter dem Avatar', 'Erledigt', 'Hoch', 'Bei WASD und mobiler Bewegung folgt die Third-Person-Kamera weich der Blickrichtung; freies Kameradrehen bleibt im Stand möglich.'],
   ['unique-room-name-mobile-create', 'Unique Raumnamen und mobile Erstellung', 'Erledigt', 'Hoch', 'Jede neue Seite schlägt einen einzigartigen sichtbaren Raumnamen vor; der mobile Create-Button bleibt auch über der iPhone-Tastatur sichtbar und anklickbar.'],
+  ['distinct-room-architectures', 'Unterschiedliche Raumgrössen und Architekturen', 'Erledigt', 'Hoch', 'Zehn eigene Architekturen mit neun Raumabmessungen: unter anderem Alpine Lodge mit Kamin, Cyber Gallery, Zen Courtyard, Dome, Habitat und Festivalfläche; Mobile lädt reduzierte Architekturdetails.'],
   ['accounts-metaverses', 'Sichere Accounts und eigene Metaverses', 'Geplant', 'Hoch', 'Account-System mit Besitz, Mitgliedschaften, Rollen und Verwaltung eigener Metaverses serverseitig absichern.']
 ];
 
